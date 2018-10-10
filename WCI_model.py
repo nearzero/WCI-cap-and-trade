@@ -21,10 +21,9 @@
 # 
 # View the [model code](https://github.com/nearzero/WCI-cap-and-trade) on Github, and download the [model documentation](https://github.com/nearzero/WCI-cap-and-trade/blob/master/documentation.docx?raw=true).
 # 
-# Near Zero gratefully acknowledges support for this work from the Energy Foundation, grant number G-1804-27647. Near Zero is solely responsible for the content of this research note.
+# Near Zero gratefully acknowledges support for this work from the Energy Foundation, grant number G-1804-27647. Near Zero is solely responsible for the content. The model, its results, and its documentation are for informational purposes only and do not constitute investment advice.
 # 
-# **About Near Zero**: Near Zero is a non-profit environmental research organization based at the Carnegie Institution for Science on the Stanford University campus. Near Zero provides credible, impartial, and actionable assessment with the goal of cutting greenhouse gas emissions to near zero. This research note is for informational purposes only and does not constitute
-# investment advice.
+# **About Near Zero**: Near Zero is a non-profit environmental research organization based at the Carnegie Institution for Science on the Stanford University campus. Near Zero provides credible, impartial, and actionable assessment with the goal of cutting greenhouse gas emissions to near zero.
 
 # # IMPORT LIBRARIES
 
