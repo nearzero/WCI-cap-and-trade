@@ -1,0 +1,14 @@
+# for use with Binder, to enable use of Jupyter extensions
+
+# when using conda to install ipython widgets in environment.yml, don't need to enable separately
+# https://ipywidgets.readthedocs.io/en/stable/user_install.html
+
+# when using conda to install nbextension in environment.yml, don't need to install JS & CSS separately
+# https://jupyter-contrib-nbextensions.readthedocs.io/en/latest/install.html
+
+jupyter nbextension enable init_cell/main
+jupyter nbextension enable hide_input_all/main
+jupyter nbextension enable hide_header/main
+
+# Notebooks w/ extensions that auto-run code must be "trusted" to work the first time
+jupyter trust binder-test-notebook_ACTIVE.ipynb

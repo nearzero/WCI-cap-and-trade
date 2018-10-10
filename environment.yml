@@ -1,0 +1,9 @@
+channels:
+  - conda-forge
+dependencies:
+  - numpy==1.15.1
+  - pandas==0.23.4
+  - bokeh==0.13.0
+  - xlrd==1.1.0
+  - jupyter_contrib_nbextensions==0.5.0
+  - ipywidgets==7.4.1
