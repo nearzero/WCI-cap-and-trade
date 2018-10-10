@@ -25,6 +25,6 @@ Each assumption can be set in "simple" mode to quickly specify a scenario, or th
 
 ---
 
-Near Zero gratefully acknowledges support for this work from the Energy Foundation, grant number G-1804-27647. Near Zero is solely responsible for the content of this research note. The model, its results, and its documentation are for informational purposes only and do not constitute investment advice.
+Near Zero gratefully acknowledges support for this work from the Energy Foundation, grant number G-1804-27647. Near Zero is solely responsible for the content. The model, its results, and its documentation are for informational purposes only and do not constitute investment advice.
 
 About Near Zero: Near Zero is a non-profit environmental research organization based at the Carnegie Institution for Science on the Stanford University campus. Near Zero provides credible, impartial, and actionable assessment with the goal of cutting greenhouse gas emissions to near zero.
