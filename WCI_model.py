@@ -7007,7 +7007,6 @@ def excess_offsets_calc(offsets_sold_ann):
     # remove the retired from the cumulative supply; drop rows with negative values
     # note: off_avail_cum will be updated below
     off_avail_cum = offsets_sold_cum - off_priv_hist_retired
-    off_avail_cum = off_avail_cum[off_avail_cum.values > 0]
 
     # then make projection of max offset retirements, simulating compliance events
     latest_hist_q = prmt.CIR_offsets_q_sums.index.max()
@@ -7052,7 +7051,6 @@ def excess_offsets_calc(offsets_sold_ann):
         
         # update off_avail_cum to remove max offset use, and remove rows with negative values
         off_avail_cum = off_avail_cum - max_off_p2_given_off_proj
-        off_avail_cum = off_avail_cum[off_avail_cum.values > 0]
 
     else:
         pass
@@ -7080,7 +7078,6 @@ def excess_offsets_calc(offsets_sold_ann):
 
         # update off_avail_cum to remove max offset use, and remove rows with negative values
         off_avail_cum = off_avail_cum - max_off_p3_given_off_proj
-        off_avail_cum = off_avail_cum[off_avail_cum.values > 0]
     else:
         pass
 
@@ -7107,7 +7104,6 @@ def excess_offsets_calc(offsets_sold_ann):
 
         # update off_avail_cum to remove max offset use, and remove rows with negative values
         off_avail_cum = off_avail_cum - max_off_p4_given_off_proj
-        off_avail_cum = off_avail_cum[off_avail_cum.values > 0]
     else:
         pass
 
@@ -7142,7 +7138,6 @@ def excess_offsets_calc(offsets_sold_ann):
 
         # update off_avail_cum to remove max offset use, and remove rows with negative values
         off_avail_cum = off_avail_cum - max_off_p5_given_off_proj
-        off_avail_cum = off_avail_cum[off_avail_cum.values > 0]
     else:
         pass
 
@@ -7170,7 +7165,6 @@ def excess_offsets_calc(offsets_sold_ann):
 
         # update off_avail_cum to remove max offset use, and remove rows with negative values
         off_avail_cum = off_avail_cum - max_off_p6_given_off_proj
-        off_avail_cum = off_avail_cum[off_avail_cum.values > 0]
     else:
         pass
 
