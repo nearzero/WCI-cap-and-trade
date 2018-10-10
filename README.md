@@ -2,6 +2,9 @@
 ## Developed by Near Zero
 ### Version 1.0
 
+load the model on Binder:
+
+[![Binder](https://mybinder.org/badge.svg)](https://mybinder.org/v2/gh/nearzero/WCI-cap-and-trade/master?filepath=interface.ipynb)
 ---
 
 © Copyright 2018 by Near Zero. This work is licensed under a Creative Commons Attribution-ShareAlike 4.0 International License.
@@ -20,9 +23,6 @@ This interactive online version of the model allows you simulate a range of supp
 * Carbon offset supplies
 
 Each assumption can be set in "simple" mode to quickly specify a scenario, or they can be set in "advanced" or "custom" mode for more detailed specifications. Click on the tabs in each category to choose the level of control over the settings.
-
-load the model on Binder:
-[![Binder](https://mybinder.org/badge.svg)](https://mybinder.org/v2/gh/nearzero/WCI-cap-and-trade/master?filepath=interface.ipynb)
 
 ---
 
