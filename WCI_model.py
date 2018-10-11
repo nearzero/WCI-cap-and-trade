@@ -8229,19 +8229,19 @@ def create_export_df():
     metadata_df.index = metadata_df.index + 2013
     
     emissions_export = prmt.emissions_ann.copy()
-    emissions_export.name = 'CA-QC covered emissions (annual)'
+    emissions_export.name = 'CA-QC covered emissions [MMTCO2e/year]'
     
     supply_export = prmt.supply_ann.copy()
-    supply_export.name = 'instrument supply additions (annual)'
+    supply_export.name = 'instrument supply additions [MMTCO2e/year]'
     
     bank_export = prmt.bank_cumul_pos.copy()
-    bank_export.name = 'banked instruments (cumulative)'
+    bank_export.name = 'banked instruments [MMTCO2e]'
     
     unsold_export = prmt.unsold_auct_hold_cur_sum.copy()
-    unsold_export.name = 'unsold allowances of current vintage (cumulative)'
+    unsold_export.name = 'unsold allowances of current vintage or earlier [MMTCO2e]'
     
     reserve_export = -1 * prmt.reserve_sales.copy()
-    reserve_export.name = 'reserve sales (cumulative)'
+    reserve_export.name = 'reserve sales [MMTCO2e]'
     
     export_df = pd.concat([emissions_export, 
                            supply_export,
