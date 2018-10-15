@@ -7,7 +7,7 @@
 # 
 # ## Developed by [Near Zero](http://nearzero.org)
 # 
-# ### Version 1.0 (Oct 10, 2018)
+# ### Version 1.0.1 (Oct 15, 2018)
 # 
 # This model simulates the supply-demand balance of the Western Climate Initiative cap-and-trade program, jointly operated by California and Quebec.
 # 
@@ -59,7 +59,7 @@ from bokeh.plotting import figure, show, output_notebook # save
 # from bokeh.models.tools import SaveTool
 from bokeh.models import Legend
 from bokeh.layouts import gridplot
-from bokeh.palettes import viridis
+from bokeh.palettes import Viridis, Blues, YlOrBr # note: Viridis is a dict; viridis is a function
 
 # # for html markup box
 # from bokeh.io import output_file, show
@@ -104,6 +104,9 @@ class Prmt():
     """
     
     def __init__(self):
+        
+        self.model_version = '1.0.1'
+        
         self.online_settings_auction = True # will be overridden below for testing; normally set by user interface
         self.years_not_sold_out = () # set by user interface
         self.fract_not_sold = float(0) # set by user interface
@@ -234,11 +237,11 @@ def load_input_files():
     # main input_file
     try:
         prmt.input_file = pd.ExcelFile(prmt.input_file_raw_url_short)
-        logging.info("downloaded input file from short url")
+        # logging.info("downloaded input file from short url")
         # prmt.loading_msg_pre_refresh += ["Loading input file..."] # for UI
     except:
         prmt.input_file = pd.ExcelFile(prmt.blob_master + prmt.input_file_raw_url_short)
-        logging.info("downloaded input file from full url")
+        logging.info("downloaded input file using full url")
         # prmt.loading_msg_pre_refresh += ["Downloading input file..."] # for UI
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2793,13 +2796,13 @@ def redesignate_unsold_advance_as_advance(all_accts, juris):
         sales_pct_adv_Q2 = df.at[f"{cq.date.year}Q2"]
         sales_pct_adv_Q3 = df.at[f"{cq.date.year}Q3"]
         
-#         # for db
+#         # for debugging
 #         if use_fake_data == True:
 #             # for 2017Q4, override actual value for adv sales in 2017Q2; set to 100%
 #             # this allows redesignation of unsold from 2017Q1 in 2017Q4
 #             if cq.date == quarter_period('2017Q4'):
 #                 sales_pct_adv_Q2 = float(1)
-#         # end db
+#         # end debugging
         
         if sales_pct_adv_Q2 == float(1) and sales_pct_adv_Q3 == float(1):
             # 100% of auction sold; redesignate unsold from Q1, up to limit
@@ -2914,6 +2917,9 @@ def process_auction_adv_all_accts(all_accts, juris):
         # iterate through all rows for available allowances; remove those sold
         
         # create df to collect sold quantities; initialize with zeros
+        # sort_index so that earliest vintages are drawn from first
+        adv_avail_1j_1q = adv_avail_1j_1q.sort_index()
+        
         adv_sold_1j_1q = adv_avail_1j_1q.copy()
         adv_sold_1j_1q['quant'] = float(0)
     
@@ -3213,6 +3219,9 @@ def reintro_update_unsold_1j(all_accts, juris, max_cur_reintro_1j_1q):
         # initialize df to collect all reintro
         reintro_1j_1q = prmt.standard_MI_empty.copy()
         
+        # sort_index to ensure that earliest vintages are drawn from first
+        reintro_eligible_1j = reintro_eligible_1j.sort_index()
+        
         for row in reintro_eligible_1j.index:
             if max_cur_reintro_1j_1q_remaining == 0:
                 break
@@ -3223,7 +3232,7 @@ def reintro_update_unsold_1j(all_accts, juris, max_cur_reintro_1j_1q):
 
                 # update accumulator for amount reintro so far in present quarter (may be more than one batch)
                 reintro_1q_quant += reintro_one_batch_quantity
-
+               
                 # update un-accumulator for max_cur_reintro_1j_1q_remaining (may be more than one batch)
                 max_cur_reintro_1j_1q_remaining += -1*reintro_one_batch_quantity
 
@@ -3456,6 +3465,9 @@ def process_auction_cur_CA_all_accts(all_accts):
         # (code adapted from avail_to_sold)
         
         # start by creating df from avail, with values zeroed out
+        # sort_index to ensure that earliest vintages are drawn from first
+        reintro_avail_1q = reintro_avail_1q.sort_index()
+        
         reintro_sold_1q = reintro_avail_1q.copy()
         reintro_sold_1q['quant'] = float(0)
 
@@ -3523,6 +3535,9 @@ def process_auction_cur_CA_all_accts(all_accts):
         # (code adapted from avail_to_sold)
         
         # start by creating df from avail, with values zeroed out
+        # sort_index to ensure that earliest vintages are drawn from first
+        new_avail_1q = new_avail_1q.sort_index()
+        
         new_sold_1q = new_avail_1q.copy()
         new_sold_1q['quant'] = float(0)
 
@@ -4967,6 +4982,9 @@ def transfer_QC_alloc_trueups__from_alloc_hold(all_accts):
                 
                 # create df of those transferred:
                 # copy whole df trueup_potential, zero out values, then set new values in loop
+                # sort_index to ensure that earliest vintages are drawn from first
+                trueup_potential = trueup_potential.sort_index()
+                
                 trueup_transfers = trueup_potential.copy()  
                 trueup_transfers['quant'] = float(0)
                 # note: trueup_transfers winds up with zero rows because it is not built up from appending rows
@@ -5621,9 +5639,12 @@ def retire_for_EIM_outstanding(all_accts):
         # get quantity to be retired in cq.date.year; 
         # initialization of variable that will be updated
         EIM_retirements = assign_EIM_retirements()
+        
         EIM_remaining = EIM_retirements.at[cq.date.year]
         
         # create df for adding transfers; copy of retire_potential, but with values zeroed out
+        # sort_index to ensure earliest vintages are drawn from first
+        retire_potential = retire_potential.sort_index()
         to_retire = retire_potential.copy()
         to_retire['quant'] = float(0)
         
@@ -5646,7 +5667,7 @@ def retire_for_EIM_outstanding(all_accts):
                         'inst_cat': 'EIM_retire', 
                         'date_level': cq.date}
         to_retire = multiindex_change(to_retire, mapping_dict)
-
+        
         # concat to_retire with all_accts remainder
         all_accts = pd.concat([all_accts.loc[~mask], retire_potential, to_retire], sort=True)
             
@@ -5906,6 +5927,9 @@ def process_auction_cur_QC_all_accts(all_accts):
         # (code adapted from avail_to_sold)
         
         # start by creating df from avail, with values zeroed out
+        # sort_index to ensure that earliest vintages are drawn from first
+        reintro_avail_1q = reintro_avail_1q.sort_index()
+        
         reintro_sold_1q = reintro_avail_1q.copy()
         reintro_sold_1q['quant'] = float(0)
         
@@ -5972,6 +5996,9 @@ def process_auction_cur_QC_all_accts(all_accts):
         # (code adapted from avail_to_sold)
         
         # start by creating df from avail, with values zeroed out
+        # sort_index to ensure that earliest vintages are drawn from first
+        new_avail_1q = new_avail_1q.sort_index()
+        
         new_sold_1q = new_avail_1q.copy()
         new_sold_1q['quant'] = float(0)
         
@@ -6285,17 +6312,22 @@ progress_bar_QC = Progress_bar.create_progress_bar(
 
 
 def assign_EIM_retirements():
-    logging.info(f"initialization: {inspect.currentframe().f_code.co_name} (start)")
+    """
+    Assign quantities for EIM Outstanding Emissions retirements in 2018, 2019, and 2020.
     
-    # *possible* assumption that would be consistent with what ARB said during informal process:
-    # assume 5 MMTCO2e retired for EIM incurred in 2017 (processed in 2018)
-    # assume 5 MMTCO2e retired for EIM incurred in 2018 (processed in 2019)
-    # assume 5/4 MMTCO2e retired for EIM incurred in 2019Q1 (processed in 2020)
-    # (units MMTCO2e)
+    These are for EIM Outstanding Emissions incurred in 2017, 2018, and 2019Q1.
+    
+    As of Oct. 2018, there was no clear data on quantities to be retired for EIM Outstanding Emissions.
+    
+    Therefore values here are set to zero until more information is available.
+    
+    """
+    logging.info(f"initialization: {inspect.currentframe().f_code.co_name} (start)")
 
     EIM_retirements_dict = {2018: 0, 
                             2019: 0, 
-                            2020: 0}
+                            2020: 0 / 4}
+    
     EIM_retirements = pd.Series(EIM_retirements_dict)
     EIM_retirements.name = 'EIM_retirements'
     EIM_retirements.index.name = 'year processed'
@@ -6305,6 +6337,14 @@ def assign_EIM_retirements():
 # ~~~~~~~~~~~~~~~~~~
 
 def assign_bankruptcy_retirements():
+    """
+    Handling of bankruptcy retirements based on "2018 Regulation Documents (Narrow Scope)": 
+    https://www.arb.ca.gov/regact/2018/capandtradeghg18/capandtradeghg18.htm
+    
+    Quantity for 2019 based on ARB statement in ARB, "Supporting Material for Assessment of Post-2020 Caps" (Apr 2018):
+    https://www.arb.ca.gov/cc/capandtrade/meetings/20180426/carb_post2020caps.pdf
+    "Approximately 5 million allowances to be retired in response to a recent bankruptcy"
+    """
     logging.info(f"initialization: {inspect.currentframe().f_code.co_name} (start)")
     
     # bankruptcy retirements (units MMTCO2e)
@@ -7679,7 +7719,6 @@ def create_figures():
                     border_line_color=None)
 
     p1.add_layout(legend, 'below')
-    # p1.add_tools(SaveTool())
 
     em_CAQC_fig = p1
     
@@ -7689,7 +7728,11 @@ def create_figures():
     # set y_max using balance_source, where balance is bank + unsold
     y_max = (int(prmt.balance.max() / 100) + 1) * 100
 
-    y_min = (int(prmt.reserve_sales.min() / 100) - 1) * 100
+    if prmt.reserve_sales.min() == 0:
+        y_min = 0
+    else:
+        # then abs(prmt.reserve_sales.min()) > 0
+        y_min = (int(prmt.reserve_sales.min() / 100) - 1) * 100
 
     p2 = figure(title='private bank and unsold allowances (cumulative)',
                                    height = 600, width = 700,
@@ -7699,10 +7742,13 @@ def create_figures():
                                    # toolbar_sticky=False,
                                   )
     
-    p2.yaxis.axis_label = "MMTCO2e"
+    p2.xaxis.axis_label = "at end of each year"
     p2.xaxis.major_label_standoff = 10
     p2.xaxis.minor_tick_line_color = None
+    
+    p2.yaxis.axis_label = "MMTCO2e"   
     p2.yaxis.minor_tick_line_color = None
+    
     p2.outline_line_color = "white"
     # p2.min_border_top = 10
     p2.min_border_right = 15
@@ -7711,26 +7757,26 @@ def create_figures():
     unsold_vbar = p2.vbar(prmt.balance.index,
                          top=prmt.balance,
                          width=1,
-                         color=viridis(6)[4], # 'limegreen',
-                         line_width=1, line_color='black')
+                         color=Viridis[6][4],
+                         line_width=1, line_color='dimgray')
     
     bank_vbar = p2.vbar(prmt.bank_cumul_pos.index,
                         top=prmt.bank_cumul_pos,
                         width=1,
-                        color=viridis(6)[3], # 'seagreen',
-                        line_width=1, line_color='black')
+                        color=Viridis[6][3],
+                        line_width=0.5, line_color='dimgray')
 
     reserve_vbar = p2.vbar(prmt.reserve_sales.index,
                            top=prmt.reserve_sales,
                            width=1,
                            color='tomato',
-                           line_width=1, line_color='black')
+                           line_width=0.5, line_color='dimgray')
     
     # add vertical line for divider between full historical data vs. projection (partial or full)
     p2.line([emissions_last_hist_yr+0.5, emissions_last_hist_yr+0.5], 
             [y_min, y_max],
             line_color='black',         
-            # line_width=2, 
+            line_width=1, 
             line_dash='dashed')
 
     legend = Legend(items=[('private bank', [bank_vbar]),
@@ -7742,7 +7788,6 @@ def create_figures():
                     border_line_color=None)
 
     p2.add_layout(legend, 'below')
-    # p2.add_tools(SaveTool())
 
     bank_CAQC_fig_bar = p2
 
@@ -8110,8 +8155,8 @@ def create_offsets_tabs():
 def create_export_df():
     
     # metadata for figure_for_export
-    metadata_list = [] # initialize
-    descrip_list = [] # initialize
+    descrip_list = [f'WCI cap-and-trade model version {prmt.model_version}'] # initialize with model version number
+    metadata_list = [f'https://github.com/nearzero/WCI-cap-and-trade/tree/v{prmt.model_version}'] # initialize with model version number
     metadata_list_of_tuples = [] # initialize
 
     if emissions_tabs.selected_index == 0:        
@@ -8421,7 +8466,7 @@ def save_csv_on_click(b):
 
     display(Javascript(prmt.js_download_of_csv))
 # end of save_csv_on_click
-    
+
 # ~~~~~~~~~~~~~~
 save_csv_button.on_click(save_csv_on_click)
 
@@ -8446,7 +8491,47 @@ if __name__ == '__main__':
     display(offsets_tabs_explainer_title)
 
 
-# #### export snaps_end
+# #### export snaps_end_all
+
+# In[ ]:
+
+
+# if __name__ == '__main__':
+#     save_timestamp = time.strftime('%Y-%m-%d_%H%M', time.localtime())
+
+#     if prmt.run_hindcast == True:    
+        
+#         # collect the snaps
+#         df = pd.concat(scenario_CA.snaps_end + scenario_QC.snaps_end, axis=0, sort=False)
+#         snaps_end_all_CA_QC = df
+        
+#         if prmt.years_not_sold_out == () and prmt.fract_not_sold == 0:
+#             # export as "all sell out (hindcast)"
+#             snaps_end_all_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_all_CA_QC all sell out (hindcast) {save_timestamp}.csv")
+        
+#         else: 
+#             # export as "some unsold (hindcast)"
+#             snaps_end_all_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_all_CA_QC some unsold (hindcast) {save_timestamp}.csv")
+
+#     else: # prmt.run_hindcast == False
+#         try:
+#             # collect the snaps, select only Q4
+#             df = pd.concat(scenario_CA.snaps_end + scenario_QC.snaps_end, axis=0, sort=False)
+#             snaps_end_all_CA_QC = df.loc[df['snap_q'].dt.quarter==4].copy()
+            
+#             if prmt.years_not_sold_out == () and prmt.fract_not_sold == 0:
+#                 # export as "all sell out (not hindcast)"
+#                 snaps_end_all_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_all_CA_QC all sell out (not hindcast) {save_timestamp}.csv")
+#             else:
+#                 # export as "some unsold (not hindcast)
+#                 snaps_end_all_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_all_CA_QC some unsold (not hindcast) {save_timestamp}.csv")
+#         except:
+#             # no results; initial run using defaults, so snaps are empty
+#             # export would just be the same as prmt.snaps_end_Q4
+#             pass
+
+
+# #### export snaps_end_Q4
 
 # In[ ]:
 
@@ -8484,6 +8569,17 @@ if __name__ == '__main__':
 #             # no results; initial run using defaults, so snaps are empty
 #             # export would just be the same as prmt.snaps_end_Q4
 #             pass
+
+
+# In[ ]:
+
+
+# if __name__ == '__main__':
+#     save_timestamp = time.strftime('%Y-%m-%d_%H%M', time.localtime())
+    
+#     avail_accum_all = pd.concat([scenario_CA.avail_accum, scenario_QC.avail_accum], axis=0, sort=False)
+    
+#     avail_accum_all.to_csv(os.getcwd() + '/' + f"avail_accum_all all sell out {save_timestamp}.csv")
 
 
 # # END OF MODEL
