@@ -7,7 +7,7 @@
 # 
 # ## Developed by [Near Zero](http://nearzero.org)
 # 
-# ### Version 1.0.1 (Oct 15, 2018)
+# ### Version 1.0.2 (Oct 18, 2018)
 # 
 # This model simulates the supply-demand balance of the Western Climate Initiative cap-and-trade program, jointly operated by California and Quebec.
 # 
@@ -19,7 +19,7 @@
 # 
 # The model is open source, released under the Creative Commons license above, and is written in Python, including use of the library [Pandas](https://pandas.pydata.org/). The online user interface is built using [Jupyter](https://jupyter.org/), with figures using [Bokeh](http://bokeh.pydata.org/), and hosted online through [Binder](https://mybinder.org/).
 # 
-# View the [model code](https://github.com/nearzero/WCI-cap-and-trade) on Github, and download the [model documentation](https://github.com/nearzero/WCI-cap-and-trade/blob/master/documentation.docx?raw=true).
+# On Github, see the [model code](https://github.com/nearzero/WCI-cap-and-trade) and [release notes](https://github.com/nearzero/WCI-cap-and-trade/releases), and [model documentation](https://github.com/nearzero/WCI-cap-and-trade/blob/master/documentation.docx?raw=true).
 # 
 # Near Zero gratefully acknowledges support for this work from the Energy Foundation, grant number G-1804-27647. Near Zero is solely responsible for the content. The model, its results, and its documentation are for informational purposes only and do not constitute investment advice.
 # 
@@ -144,6 +144,8 @@ class Prmt():
                                          freq='Q').to_period('Q')
         
         self.blob_master = "https://github.com/nearzero/WCI-cap-and-trade/blob/master"
+        # overridden below if cwd is local copy of repo WCI-Private
+        
         self.input_file_raw_url_short = "/data/data_input_file.xlsx?raw=true"
         self.CIR_raw_url_short = "/data/CIR_file.xlsx?raw=true"
         
@@ -231,6 +233,21 @@ prmt = Prmt()
 # In[ ]:
 
 
+# for testing using private repo, ensure download of input file from the private repo
+if os.getcwd() == '/Users/masoninman/Dropbox/WCI-Private':
+    # override prmt.blob_master
+    prmt.blob_master = "/Users/masoninman/Dropbox/WCI-Private"
+    
+    # override prmt.input_file_raw_url_short to remove suffix "?raw=true"
+    prmt.input_file_raw_url_short = "/data/data_input_file.xlsx"
+    
+    # override CIR file url to remove suffix "?raw=true"
+    prmt.CIR_raw_url_short = "/data/CIR_file.xlsx"
+
+
+# In[ ]:
+
+
 def load_input_files():
     # download each file once from Github, set each as an attribute of object prmt
 
@@ -266,7 +283,7 @@ def snaps_end_Q4_all_sell_initialize():
     """
     
     # read snaps_end_Q4 from input_file sheet, set new value for object attribute
-    prmt.snaps_end_Q4 = pd.read_excel(prmt.input_file, sheet_name='snaps end Q4 all sell out')
+    prmt.snaps_end_Q4 = pd.read_excel(prmt.input_file, sheet_name='snaps end Q4 all sell out', header=1)
     
     # format columns as Period (quarters)
     for col in ['snap_q', 'date_level', 'unsold_di', 'unsold_dl']:
@@ -1401,6 +1418,7 @@ def get_QC_allocation_data():
     # ~~~~~~~~~~~~~~~~~~~~~~
     # calculate true-ups for each distribution from cumulative data reported
     # (use diff to calculate difference between a given data point and previous one)
+    # (each set has an initial value before true-ups, so diff starts with diff between initial and true-up #1)
     QC_alloc_trueups = QC_alloc_hist.groupby('allocation for emissions year').diff().dropna()
     QC_alloc_trueups.index = QC_alloc_trueups.index.droplevel('allocation type')
     
@@ -4581,6 +4599,9 @@ def get_VRE_retired_from_CIR():
     VRE.columns.name = 'CIR_date'
     VRE.index.name = 'vintage'
 
+    # use diff to find quarterly changes
+    # (there were none retired in the initial CIR quarter, 2014Q2, 
+    # so no problem with diff not calculating value for first CIR quarter)
     VRE_retired = VRE.T.diff().T * -1
     VRE_retired = VRE_retired.replace(-0.0, np.NaN)
     VRE_retired = VRE_retired.dropna(how='all')
@@ -6869,52 +6890,68 @@ def offsets_projection():
     DOCSTRING
     """
     logging.info(f"{inspect.currentframe().f_code.co_name}")
-        
-    offsets_sold_hist_cumul = prmt.CIR_offsets_q_sums[['General', 'Compliance', 'Retirement']].sum(axis=1)
-    
+
+    offsets_priv_hist = prmt.CIR_offsets_q_sums[['General', 'Compliance']].sum(axis=1)
+
+    # get offsets retired for compliance obligations from input file, sheet "annual compliance reports"
+    offsets_compl_oblig_hist = prmt.compliance_events.xs('offsets', level='vintage or type')
+
+    offsets_compl_oblig_hist_cumul = offsets_compl_oblig_hist.cumsum()
+
+    # calculate cumulative offsets added to supply
+    # (excludes any offsets that were retired anomalously--that is, not for compliance obligations)
+    df = pd.concat([offsets_priv_hist, offsets_compl_oblig_hist_cumul], axis=1)
+    df = df.ffill()
+    offsets_supply_hist_cumul = df.sum(axis=1)
+
     # BANKING METRIC: supply: offsets
     # B = A' + N + **O** - E
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # HISTORICAL 
-    # get quarterly values derived from CIR
-    offsets_sold_q = offsets_sold_hist_cumul.diff()
-    
-    # if a year has only partial quarterly data, make projection for remainder of year
-    last_hist_date = offsets_sold_q.index[-1]
+    # get quarterly values derived from CIR and annual compliance reports
+    # insert value for initial quarter (since diff turns that into NaN)
+    offsets_supply_q = offsets_supply_hist_cumul.diff()
+    first_q = offsets_supply_q.index.min()
+    offsets_supply_q.at[first_q] = offsets_supply_hist_cumul.at[first_q]
 
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # PROJECTION TO FILL OUT REMAINING QUARTERS IN YEAR WITH PARTIAL DATA
+    # if a year has only partial quarterly data, make projection for remainder of year
+    last_hist_date = offsets_supply_q.index[-1]
+
     if last_hist_date.year == 2018:
         # hard-code in projection for 2018
         # because we know there was a very large forestry project issuance in 2017Q4-2018Q1
         for quarter in range(last_hist_date.quarter+1, 4+1):
-            # assume after Q2, same as Q2
+            # assume Q4 same as Q2-Q3 average
 
-            # get 2018Q2 value
-            offsets_2018Q2 = offsets_sold_q.at[quarter_period('2018Q2')]
+            # get 2018Q2-Q3 average
+            offsets_2018Q2 = offsets_supply_q.at[quarter_period('2018Q2')]
+            offsets_2018Q3 = offsets_supply_q.at[quarter_period('2018Q3')]
+            offsets_2018Q2_Q3_avg = (offsets_2018Q2 + offsets_2018Q3) / 2
 
             # calculate projection
             year_q = quarter_period(f'2018Q{quarter}')
-            offsets_sold_q.at[year_q] = offsets_2018Q2
+            offsets_supply_q.at[year_q] = offsets_2018Q2_Q3_avg
 
     else:
         for quarter in range(last_hist_date.quarter+1, 4+1):
             # use average of previous 4 quarters
-            offsets_priv_past_4Q = offsets_sold_q.loc[offsets_sold_q.index[-4]:]
-            offsets_priv_past_4Q_avg = offsets_priv_past_4Q.sum() / 4
-            
-            logging.info("offsets_priv_past_4Q_avg: {offsets_priv_past_4Q_avg}")
+            offsets_supply_past_4Q = offsets_supply_q.loc[offsets_supply_q.index[-4]:]
+            offsets_supply_past_4Q_avg = offsets_supply_past_4Q.sum() / 4
+
+            logging.info("offsets_supply_past_4Q_avg: {offsets_supply_past_4Q_avg}")
 
             # use average values to calculate
             year_q = quarter_period(f'{last_hist_date.year}Q{quarter}')
-            offsets_sold_q.at[year_q] = offsets_priv_past_4Q_avg
+            offsets_supply_q.at[year_q] = offsets_supply_past_4Q_avg
 
     # end of projection to fill out last historical year with partial data
 
     # calculate annual offset totals
-    offsets_sold_ann = offsets_sold_q.resample('A').sum()
-    offsets_sold_ann.index = offsets_sold_ann.index.year.astype(int)
+    offsets_supply_ann = offsets_supply_q.resample('A').sum()
+    offsets_supply_ann.index = offsets_supply_ann.index.year.astype(int)
     
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # PROJECTION BEYOND LAST YEAR WITH HISTORICAL DATA
@@ -6946,29 +6983,29 @@ def offsets_projection():
         for year in range(last_hist_date.year+1, 2020+1):
             # for CA & QC together
             offset_rate_ann = off_pct_of_limit_CAQC.slider.value * 0.08
-            offsets_sold_ann.at[year] = prmt.emissions_ann.at[year] * offset_rate_ann
+            offsets_supply_ann.at[year] = prmt.emissions_ann.at[year] * offset_rate_ann
             
         for year in range(2020+1, 2025+1):
             # for CA & QC separately
             offset_rate_CA = off_pct_of_limit_CAQC.slider.value * 0.04
             offset_rate_QC = off_pct_of_limit_CAQC.slider.value * 0.08
             
-            offsets_sold_ann_CA_1y = prmt.emissions_ann_CA.at[year] * offset_rate_CA
-            offsets_sold_ann_QC_1y = prmt.emissions_ann_QC.at[year] * offset_rate_QC
+            offsets_supply_ann_CA_1y = prmt.emissions_ann_CA.at[year] * offset_rate_CA
+            offsets_supply_ann_QC_1y = prmt.emissions_ann_QC.at[year] * offset_rate_QC
             
             # combine CA & QC
-            offsets_sold_ann.at[year] = offsets_sold_ann_CA_1y + offsets_sold_ann_QC_1y
+            offsets_supply_ann.at[year] = offsets_supply_ann_CA_1y + offsets_supply_ann_QC_1y
             
         for year in range(2025+1, 2030+1):
             # for CA & QC separately
             offset_rate_CA = off_pct_of_limit_CAQC.slider.value * 0.06
             offset_rate_QC = off_pct_of_limit_CAQC.slider.value * 0.08
             
-            offsets_sold_ann_CA_1y = prmt.emissions_ann_CA.at[year] * offset_rate_CA
-            offsets_sold_ann_QC_1y = prmt.emissions_ann_QC.at[year] * offset_rate_QC
+            offsets_supply_ann_CA_1y = prmt.emissions_ann_CA.at[year] * offset_rate_CA
+            offsets_supply_ann_QC_1y = prmt.emissions_ann_QC.at[year] * offset_rate_QC
             
             # combine CA & QC
-            offsets_sold_ann.at[year] = offsets_sold_ann_CA_1y + offsets_sold_ann_QC_1y
+            offsets_supply_ann.at[year] = offsets_supply_ann_CA_1y + offsets_supply_ann_QC_1y
             
     elif offsets_tabs.selected_index == 1:
         # advanced settings
@@ -6979,175 +7016,221 @@ def offsets_projection():
             offset_rate_CA = off_pct_CA_adv1.slider.value
             offset_rate_QC = off_pct_QC_adv1.slider.value
             
-            offsets_sold_ann_CA_1y = prmt.emissions_ann_CA.at[year] * offset_rate_CA
-            offsets_sold_ann_QC_1y = prmt.emissions_ann_QC.at[year] * offset_rate_QC
+            offsets_supply_ann_CA_1y = prmt.emissions_ann_CA.at[year] * offset_rate_CA
+            offsets_supply_ann_QC_1y = prmt.emissions_ann_QC.at[year] * offset_rate_QC
             
             # combine CA & QC
-            offsets_sold_ann.at[year] = offsets_sold_ann_CA_1y + offsets_sold_ann_QC_1y
+            offsets_supply_ann.at[year] = offsets_supply_ann_CA_1y + offsets_supply_ann_QC_1y
             
         for year in range(2020+1, 2025+1):
             # for CA & QC separately, using period 2 sliders
             offset_rate_CA = off_pct_CA_adv2.slider.value
             offset_rate_QC = off_pct_QC_adv2.slider.value
             
-            offsets_sold_ann_CA_1y = prmt.emissions_ann_CA.at[year] * offset_rate_CA
-            offsets_sold_ann_QC_1y = prmt.emissions_ann_QC.at[year] * offset_rate_QC
+            offsets_supply_ann_CA_1y = prmt.emissions_ann_CA.at[year] * offset_rate_CA
+            offsets_supply_ann_QC_1y = prmt.emissions_ann_QC.at[year] * offset_rate_QC
             
             # combine CA & QC
-            offsets_sold_ann.at[year] = offsets_sold_ann_CA_1y + offsets_sold_ann_QC_1y
+            offsets_supply_ann.at[year] = offsets_supply_ann_CA_1y + offsets_supply_ann_QC_1y
             
         for year in range(2025+1, 2030+1):
             # for CA & QC separately, for period 3 sliders
             offset_rate_CA = off_pct_CA_adv3.slider.value
             offset_rate_QC = off_pct_QC_adv3.slider.value
             
-            offsets_sold_ann_CA_1y = prmt.emissions_ann_CA.at[year] * offset_rate_CA
-            offsets_sold_ann_QC_1y = prmt.emissions_ann_QC.at[year] * offset_rate_QC
+            offsets_supply_ann_CA_1y = prmt.emissions_ann_CA.at[year] * offset_rate_CA
+            offsets_supply_ann_QC_1y = prmt.emissions_ann_QC.at[year] * offset_rate_QC
             
             # combine CA & QC
-            offsets_sold_ann.at[year] = offsets_sold_ann_CA_1y + offsets_sold_ann_QC_1y
+            offsets_supply_ann.at[year] = offsets_supply_ann_CA_1y + offsets_supply_ann_QC_1y
 
     else:
         # offsets_tabs.selected_index is not 0 or 1
         print("Error" + "! offsets_tabs.selected_index was not one of the expected values (0 or 1).")
 
-    offsets_sold_ann.name = 'offsets_sold_ann'
+    offsets_supply_ann.name = 'offsets_supply_ann'
     
-    # calculation of excess offsets beyond what could be used
-    # (depends on temporal pattern of when offsets are added to supply)
-    # sets prmt.excess_offsets
-    excess_offsets_calc(offsets_sold_ann)
+    # calculate quarterly values for all years
+    # first get all annual supply full year projections
+    df = offsets_supply_ann.loc[offsets_supply_q.index.year[-1]+1:]
+
+    # divide by 4, reassign index to quarterly, fill in missing data (Q2-Q4)
+    # (have to put in 2031 value as placeholder, so that resample will go through end of 2030)
+    df = df / 4
+    df.at[2031] = 0
+    df.index = pd.to_datetime(df.index.astype(str) + 'Q1').to_period('Q')
+    df = df.resample('Q').ffill()
+    df = df.drop(quarter_period('2031Q1'))
+
+    # append the quarterly projections to the quarterly data 
+    # (historical data; also, if latest historical year has only partial data, projection for remainder of year)
+    offsets_supply_q = offsets_supply_q.append(df)
+
+    offsets_supply_q.name = 'offsets_supply_q'
     
-    return(offsets_sold_ann)
+    return(offsets_supply_q, offsets_supply_ann)
 # end of offsets_projection
 
 
 # In[ ]:
 
 
-def excess_offsets_calc(offsets_sold_ann):
+def excess_offsets_calc(offsets_supply_q):
+    """
+    Calculate whether the offset supply (as specified by user) exceeds what could be used through 2030.
+    
+    For all compliance periods *except* period #5 (for emissions 2024-2026):
+    assume ARB allows emitters to go up to max for whole compliance period, 
+    regardless of offset use in annual compliance events during that compliance period.
+    
+    For compliance period #5, for CA, max offsets are applied separately to emissions 2024-2025 and emissions 2026.
+    """
     logging.info(f"{inspect.currentframe().f_code.co_name} (start)")
 
-    # notes:
-    # offsets_projection() returns offsets_sold_ann, which is a record of additions to offset supply annually
-    # (both historically and projected)
+    # get historical record of offsets used for compliance
+    offsets_used_hist = prmt.compliance_events.loc[
+        prmt.compliance_events.index.get_level_values('vintage or type')=='offsets']
+    
+    # get the latest year with compliance event data
+    latest_comp_y = prmt.compliance_events.index.get_level_values('compliance_date').max().year
 
-    # calculate cumsum to get gross cumulative supply
-    offsets_sold_cum = offsets_sold_ann.cumsum()
-
-    # to calculate those available to use at any time, remove the historical retirements
-    # (those available at any time is cumsum of this series of "offsets available" minus retirements to date)
-    # generalized: get the retirements from CIR, remove those, starting from earliest offset "vintage"
-    # note: a more accurate approach might be to get retired offsets from compliance reports
-    df = prmt.CIR_offsets_q_sums.copy()
-    df = df.loc[df.index[-1:]]
-    off_priv_hist_retired = df['Retirement'].sum()
-
-    # remove the retired from the cumulative supply; drop rows with negative values
-    # note: off_avail_cum will be updated below
-    off_avail_cum = offsets_sold_cum - off_priv_hist_retired
-
-    # then make projection of max offset retirements, simulating compliance events
-    latest_hist_q = prmt.CIR_offsets_q_sums.index.max()
-
-    first_year = 2015 # initialize projection of retirements
+    # initialize first_em_year, which is first year of emissions for each compliance period
+    first_em_year = 2015
+    
+    # initialize offsets used
+    offsets_used_in_completed_periods = 0
+    
+    # initialize offsets_avail (value is iteratively updated below)
+    # offsets used in previous completed periods
+    offsets_used_in_completed_periods += offsets_used_hist[
+        offsets_used_hist.index.get_level_values('compliance_date').year<=first_em_year]['quant'].sum()
+    
+#     # offsets available for use in compliance period #1 (initialization)
+#     offsets_supply_at_end_2015Q3 = offsets_supply_q.loc[:quarter_period(f'{first_em_year}Q3')].sum()
+#     offsets_supply_2015Q4_first_mo = offsets_supply_q.at[quarter_period(f'{first_em_year}Q4')] / 3
+#     # Q4 first month above is an approximation
+#     offsets_supply_at_p1_event = offsets_supply_at_end_2015Q3 + offsets_supply_2015Q4_first_mo
+#     offsets_avail = offsets_supply_at_p1_event - offsets_used_in_completed_periods   
 
     # compliance period #2 obligations for emissions 2015-2017 (due Nov 1, 2018)
-    if latest_hist_q < quarter_period(f'{first_year+3}Q4'):
+    if latest_comp_y < first_em_year+3:
         # latest CIR data is before 2018Q4, so simulate compliance period #2 obligations
-        # max offsets are 8% for both CA & QC; 
-        # assume ARB allows emitters to go up to max for whole compliance period, regardless of what they retired earlier
-
-        max_off_p2_CA = prmt.emissions_ann_CA.loc[first_year:first_year+2].sum() * 0.08
-        max_off_p2_QC = prmt.emissions_ann_QC.loc[first_year:first_year+2].sum() * 0.08
-
-        # retired to date for compliance for CA for compliance period #2 
-        # get record of retirements from annual compliance reports for 2016 & 2017
-        df = pd.read_excel(prmt.input_file, sheet_name='annual compliance reports')
-        df = df.set_index('year of compliance event')
-        df = df.loc[df.index.isin(range(2013, 2030+1))]
-        df.index = df.index.astype(int)
-        off_ret_for_CA_2016_2017 = df.loc[first_year:first_year+1]['CA entities retired offsets'].sum()    
-
-        # CA entities: additional offsets required to be used to hit max
-        max_off_p2_CA_req = max_off_p2_CA - off_ret_for_CA_2016_2017
-
-        # QC entities: no annual compliance periods, so required is same as max for the period       
-
-        # CA + QC: calculate the max offsets that could be used, given the offsets projection (offsets_sold_ann)
-        # minimum of those that would be required to get to max & offsets available at time of compliance event
-        # (given that CA entities already retired some offsets in 2016 & 2017, for emissions in 2015 & 2016)
-
-        # as an approximation, assume that offsets available to use in Nov 1, 2018 compliance event...
-        # ... are all those issued through end of 2018; in reality, those issued Nov & Dec 2018 would not be available
-
-        max_off_p2_given_off_proj = min((max_off_p2_CA_req + max_off_p2_QC), off_avail_cum.at[first_year+3])
-
-#         if (max_off_p2_CA_req + max_off_p2_QC) > off_avail_cum.at[first_year+3]:
-#             print("Compliance period 2: Offset use would be limited by available offsets")
-#         elif (max_off_p2_CA_req + max_off_p2_QC) <= off_avail_cum.at[first_year+3]:
-#             print("Compliance period 2: Offset use could be maxed out.")
         
-        # update off_avail_cum to remove max offset use, and remove rows with negative values
-        off_avail_cum = off_avail_cum - max_off_p2_given_off_proj
+        # offsets available for use in compliance period #2
+        # Q3 and Q4 below refer to year of compliance event (first_em_year+3)
+        offsets_supply_at_end_Q3 = offsets_supply_q.loc[:quarter_period(f'{first_em_year+3}Q3')].sum()
+        offsets_supply_Q4_first_mo = offsets_supply_q.at[quarter_period(f'{first_em_year+3}Q4')] / 3
+        # Q4 first month above is an approximation
+        offsets_supply_at_event = offsets_supply_at_end_Q3 + offsets_supply_Q4_first_mo
+        offsets_avail = offsets_supply_at_event - offsets_used_in_completed_periods
+        
+        # max offsets are 8% for both CA & QC; 
+        max_off_p2_CA = prmt.emissions_ann_CA.loc[first_em_year:first_em_year+2].sum() * 0.08
+        max_off_p2_QC = prmt.emissions_ann_QC.loc[first_em_year:first_em_year+2].sum() * 0.08
+        
+        # CA + QC: calculate the max offsets that could be used, given the offsets projection (offsets_supply_q)
+        # minimum of: max that could be used in p2 & offsets available at time of p2
+        max_off_p2_given_off_proj = min((max_off_p2_CA + max_off_p2_QC), offsets_avail)
+
+#         # for debugging
+#         print(f"max: {max_off_p2_CA + max_off_p2_QC}; avail: {offsets_avail}; %: {offsets_avail/(max_off_p2_CA + max_off_p2_QC)}")
+#         if (max_off_p2_CA + max_off_p2_QC) > offsets_avail:
+#             print("Compliance period 2: Offset use would be limited by available offsets")
+#         elif (max_off_p2_CA + max_off_p2_QC) <= offsets_avail:
+#             print("Compliance period 2: Offset use could be maxed out.")
+            
+        # update offsets_avail to remove max offset use
+        offsets_avail += -1 * max_off_p2_given_off_proj
+        offsets_used_in_completed_periods += max_off_p2_given_off_proj
+        
+#         print(f"show offsets_avail after p2 retirements: {offsets_avail}") # for db
+#         print() # for db
 
     else:
         pass
 
     # ~~~~~~~~~~~~~~~~~~~~
-    first_year += 3 # step forward 3 years
+    first_em_year += 3 # step forward 3 years
 
     # compliance period #3 obligations for emissions 2018-2020 (due Nov 1, 2021)
-    if prmt.CIR_offsets_q_sums.index.max() < quarter_period(f'{first_year+3}Q4'):
+    if latest_comp_y < first_em_year+3:
         # latest CIR data is before 2021Q4, so simulate compliance period #3 obligations
-        # max offsets are 8% for CA & QC; 
-        # assume ARB allows emitters to go up to max for whole compliance period, regardless of what they retired earlier
+        
+        # offsets available for use in compliance period #3
+        # Q3 and Q4 below refer to year of compliance event (first_em_year+3)
+        offsets_supply_at_end_Q3 = offsets_supply_q.loc[:quarter_period(f'{first_em_year+3}Q3')].sum()
+        offsets_supply_Q4_first_mo = offsets_supply_q.at[quarter_period(f'{first_em_year+3}Q4')] / 3
+        # Q4 first month above is an approximation
+        offsets_supply_at_event = offsets_supply_at_end_Q3 + offsets_supply_Q4_first_mo
+        offsets_avail = offsets_supply_at_event - offsets_used_in_completed_periods 
+        
+        # max offsets are 8% for CA & QC
+        max_off_p3_CA = prmt.emissions_ann_CA.loc[first_em_year:first_em_year+2].sum() * 0.08
+        max_off_p3_QC = prmt.emissions_ann_QC.loc[first_em_year:first_em_year+2].sum() * 0.08
+            
+        # CA + QC: calculate the max offsets that could be used, given the offsets projection (offsets_supply_q)
+        # minimum of: max that could be used in p3 & offsets available at time of p3
+        max_off_p3_given_off_proj = min((max_off_p3_CA + max_off_p3_QC), offsets_avail)
 
-        max_off_p3_CA = prmt.emissions_ann_CA.loc[first_year:first_year+2].sum() * 0.08
-        max_off_p3_QC = prmt.emissions_ann_QC.loc[first_year:first_year+2].sum() * 0.08
-
-        # calculate the max offsets that could be used, given the offsets projection (offsets_sold_ann)
-        # minimum of theoretical max & offsets available at time of compliance event
-        max_off_p3_given_off_proj = min((max_off_p3_CA + max_off_p3_QC), off_avail_cum.at[first_year+3])
-
-#         if (max_off_p3_CA + max_off_p3_QC) > off_avail_cum.at[first_year+3]:
+#         # for debugging
+#         print(f"max: {max_off_p3_CA + max_off_p3_QC}; avail: {offsets_avail}; %: {offsets_avail/(max_off_p3_CA + max_off_p3_QC)}")
+#         if (max_off_p3_CA + max_off_p3_QC) > offsets_avail:
 #             print("Compliance period 3: Offset use would be limited by available offsets")
-#         elif (max_off_p3_CA + max_off_p3_QC) <= off_avail_cum.at[first_year+3]:
+#         elif (max_off_p3_CA + max_off_p3_QC) <= offsets_avail:
 #             print("Compliance period 3: Offset use could be maxed out.")
-
-        # update off_avail_cum to remove max offset use, and remove rows with negative values
-        off_avail_cum = off_avail_cum - max_off_p3_given_off_proj
+        
+        # update offsets_avail to remove max offset use
+        offsets_avail += -1 * max_off_p3_given_off_proj
+        offsets_used_in_completed_periods += max_off_p3_given_off_proj
+        
+#         print(f"show offsets_avail after p3 retirements: {offsets_avail}") # for db
+#         print() # for db
+        
     else:
         pass
 
     # ~~~~~~~~~~~~~~~~~~~~
-    first_year += 3 # step forward 3 years
+    first_em_year += 3 # step forward 3 years
 
     # compliance period #4 obligations for emissions 2021-2023 (due Nov 1, 2024)
-    if prmt.CIR_offsets_q_sums.index.max() < quarter_period(f'{first_year+3}Q4'):
-        # latest CIR data is before 2021Q4, so simulate compliance period #3 obligations
-        # max offsets are 8% for CA & QC; 
-        # assume ARB allows emitters to go up to max for whole compliance period, regardless of what they retired earlier
+    if latest_comp_y < first_em_year+3:
+        # latest CIR data is before 2021Q4, so simulate compliance period #4 obligations
+        
+        # offsets available for use in compliance period #4
+        # Q3 and Q4 below refer to year of compliance event (first_em_year+3)
+        offsets_supply_at_end_Q3 = offsets_supply_q.loc[:quarter_period(f'{first_em_year+3}Q3')].sum()
+        offsets_supply_Q4_first_mo = offsets_supply_q.at[quarter_period(f'{first_em_year+3}Q4')] / 3
+        # Q4 first month above is an approximation
+        offsets_supply_at_event = offsets_supply_at_end_Q3 + offsets_supply_Q4_first_mo
+        offsets_avail = offsets_supply_at_event - offsets_used_in_completed_periods 
+        
+        # max offsets are 4% for CA & 8% for QC
+        max_off_p4_CA = prmt.emissions_ann_CA.loc[first_em_year:first_em_year+2].sum() * 0.04
+        max_off_p4_QC = prmt.emissions_ann_QC.loc[first_em_year:first_em_year+2].sum() * 0.08
+        
+        # CA + QC: calculate the max offsets that could be used, given the offsets projection (offsets_supply_q)
+        # minimum of: max that could be used in p4 & offsets available at time of p4
+        max_off_p4_given_off_proj = min((max_off_p4_CA + max_off_p4_QC), offsets_avail)
 
-        max_off_p4_CA = prmt.emissions_ann_CA.loc[first_year:first_year+2].sum() * 0.04
-        max_off_p4_QC = prmt.emissions_ann_QC.loc[first_year:first_year+2].sum() * 0.08
-
-        # calculate the max offsets that could be used, given the offsets projection (offsets_sold_ann)
-        # minimum of theoretical max & offsets available at time of compliance event
-        max_off_p4_given_off_proj = min((max_off_p4_CA + max_off_p4_QC), off_avail_cum.at[first_year+3])
-
-#         if (max_off_p4_CA + max_off_p4_QC) > off_avail_cum.at[first_year+3]:
+#         # for debugging
+#         print(f"max: {max_off_p4_CA + max_off_p4_QC}; avail: {offsets_avail}; %: {offsets_avail/(max_off_p4_CA + max_off_p4_QC)}")
+#         if (max_off_p4_CA + max_off_p4_QC) > offsets_avail:
 #             print("Compliance period 4: Offset use would be limited by available offsets")
-#         elif (max_off_p4_CA + max_off_p4_QC) <= off_avail_cum.at[first_year+3]:
+#         elif (max_off_p4_CA + max_off_p4_QC) <= offsets_avail:
 #             print("Compliance period 4: Offset use could be maxed out.")
 
-        # update off_avail_cum to remove max offset use, and remove rows with negative values
-        off_avail_cum = off_avail_cum - max_off_p4_given_off_proj
+        # update offsets_avail to remove max offset use
+        offsets_avail += -1 * max_off_p4_given_off_proj
+        offsets_used_in_completed_periods += max_off_p4_given_off_proj
+        
+#         print(f"show offsets_avail after p4 retirements: {offsets_avail}") # for db
+#         print() # for db
+        
     else:
         pass
 
     # ~~~~~~~~~~~~~~~~~~~~
-    first_year += 3 # step forward 3 years
+    first_em_year += 3 # step forward 3 years
 
     # compliance period #5 obligations for emissions 2024-2026 (due in full Nov 1, 2027)
 
@@ -7155,61 +7238,97 @@ def excess_offsets_calc(offsets_sold_ann):
     # this compliance period is anomalous for CA because of change in offset max use under AB 398 from 4% to 6%,
     # which doesn't match with timing of compliance period deadline
 
-    if prmt.CIR_offsets_q_sums.index.max() < quarter_period(f'{first_year+3}Q4'):
-        # latest CIR data is before 2021Q4, so simulate compliance period #3 obligations
-        # max offsets are 8% for CA & QC; 
-        # assume ARB allows emitters to go up to max for whole compliance period, regardless of what they retired earlier
-
-        max_off_CA_2024_2025 = prmt.emissions_ann_CA.loc[first_year:first_year+1].sum() * 0.04
-        max_off_CA_2026 = prmt.emissions_ann_CA.loc[first_year+2].sum() * 0.06
-        max_off_p5_QC = prmt.emissions_ann_QC.loc[first_year:first_year+2].sum() * 0.08
+    if latest_comp_y < first_em_year+3:
+        # latest CIR data is before 2021Q4, so simulate compliance period #5 obligations
+        
+        # offsets available for use in compliance period #5
+        # Q3 and Q4 below refer to year of compliance event (first_em_year+3)
+        offsets_supply_at_end_Q3 = offsets_supply_q.loc[:quarter_period(f'{first_em_year+3}Q3')].sum()
+        offsets_supply_Q4_first_mo = offsets_supply_q.at[quarter_period(f'{first_em_year+3}Q4')] / 3
+        # Q4 first month above is an approximation
+        offsets_supply_at_event = offsets_supply_at_end_Q3 + offsets_supply_Q4_first_mo
+        offsets_avail = offsets_supply_at_event - offsets_used_in_completed_periods 
+        
+        # for CA, max offsets are 4% for emissions incurred in 2024-2025, 6% for emissions incurred in 2026
+        # for QC, max offsets are 8% of emissions for all years 2024-2026
+ 
+        max_off_CA_2024_2025 = prmt.emissions_ann_CA.loc[first_em_year:first_em_year+1].sum() * 0.04
+        max_off_CA_2026 = prmt.emissions_ann_CA.loc[first_em_year+2].sum() * 0.06
+        max_off_p5_QC = prmt.emissions_ann_QC.loc[first_em_year:first_em_year+2].sum() * 0.08
 
         max_off_p5 = max_off_CA_2024_2025 + max_off_CA_2026 + max_off_p5_QC
+        
+        # CA + QC: calculate the max offsets that could be used, given the offsets projection (offsets_supply_q)
+        # minimum of: max that could be used in p5 & offsets available at time of p5
+        max_off_p5_given_off_proj = min((max_off_p5), offsets_avail)
 
-        # calculate the max offsets that could be used, given the offsets projection (offsets_sold_ann)
-        # minimum of theoretical max & offsets available at time of compliance event
-        max_off_p5_given_off_proj = min(max_off_p5, off_avail_cum.at[first_year+3])
-
-#         if max_off_p5 > off_avail_cum.at[first_year+3]:
+#         # for debugging
+#         print(f"max: {max_off_p5}; avail: {offsets_avail}; %: {offsets_avail/(max_off_p5)}")
+#         if (max_off_p5) > offsets_avail:
 #             print("Compliance period 5: Offset use would be limited by available offsets")
-#         elif max_off_p5 <= off_avail_cum.at[first_year+3]:
+#         elif (max_off_p5) <= offsets_avail:
 #             print("Compliance period 5: Offset use could be maxed out.")
-
-        # update off_avail_cum to remove max offset use, and remove rows with negative values
-        off_avail_cum = off_avail_cum - max_off_p5_given_off_proj
+        
+        # update offsets_avail to remove max offset use
+        offsets_avail += -1 * max_off_p5_given_off_proj
+        offsets_used_in_completed_periods += max_off_p5_given_off_proj
+        
+#         print(f"show offsets_avail after p5 retirements: {offsets_avail}") # for db
+#         print() # for db
+        
     else:
         pass
 
     # ~~~~~~~~~~~~~~~~~~~~
-    first_year += 3 # step forward 3 years
+    first_em_year += 3 # step forward 3 years
 
     # compliance period #6 obligations for emissions 2027-2029 (due Nov 1, 2030)
 
-    if prmt.CIR_offsets_q_sums.index.max() < quarter_period(f'{first_year+3}Q4'):
-        # latest CIR data is before 2021Q4, so simulate compliance period #3 obligations
-        # max offsets are 8% for CA & QC; 
-        # assume ARB allows emitters to go up to max for whole compliance period, regardless of what they retired earlier
+    if latest_comp_y < first_em_year+3:
+        # latest CIR data is before 2021Q4, so simulate compliance period #6 obligations
+        
+        # offsets available for use in compliance period #6
+        # Q3 and Q4 below refer to year of compliance event (first_em_year+3)
+        offsets_supply_at_end_Q3 = offsets_supply_q.loc[:quarter_period(f'{first_em_year+3}Q3')].sum()
+        offsets_supply_Q4_first_mo = offsets_supply_q.at[quarter_period(f'{first_em_year+3}Q4')] / 3
+        # Q4 first month above is an approximation
+        offsets_supply_at_event = offsets_supply_at_end_Q3 + offsets_supply_Q4_first_mo
+        offsets_avail = offsets_supply_at_event - offsets_used_in_completed_periods 
+        
+        # max offsets are 6% for CA & 8% for QC
+        max_off_p6_CA = prmt.emissions_ann_CA.loc[first_em_year:first_em_year+2].sum() * 0.06
+        max_off_p6_QC = prmt.emissions_ann_QC.loc[first_em_year:first_em_year+2].sum() * 0.08
+        
+        # CA + QC: calculate the max offsets that could be used, given the offsets projection (offsets_supply_q)
+        # minimum of: max that could be used in p6 & offsets available at time of p6
+        max_off_p6_given_off_proj = min((max_off_p6_CA + max_off_p6_QC), offsets_avail)
 
-        max_off_p6_CA = prmt.emissions_ann_CA.loc[first_year:first_year+2].sum() * 0.06
-        max_off_p6_QC = prmt.emissions_ann_QC.loc[first_year:first_year+2].sum() * 0.08
-
-        # calculate the max offsets that could be used, given the offsets projection (offsets_sold_ann)
-        # minimum of theoretical max & offsets available at time of compliance event
-        max_off_p6_given_off_proj = min((max_off_p6_CA + max_off_p6_QC), off_avail_cum.at[first_year+3])
-
-#         if (max_off_p6_CA + max_off_p6_QC) > off_avail_cum.at[first_year+3]:
+#         # for debugging
+#         print(f"max: {max_off_p6_CA + max_off_p6_QC}; avail: {offsets_avail}; %: {offsets_avail/(max_off_p6_CA + max_off_p6_QC)}")
+#         if (max_off_p6_CA + max_off_p6_QC) > offsets_avail:
 #             print("Compliance period 6: Offset use would be limited by available offsets")
-#         elif (max_off_p6_CA + max_off_p6_QC) <= off_avail_cum.at[first_year+3]:
+#         elif (max_off_p6_CA + max_off_p6_QC) <= offsets_avail:
 #             print("Compliance period 6: Offset use could be maxed out.")
-
-        # update off_avail_cum to remove max offset use, and remove rows with negative values
-        off_avail_cum = off_avail_cum - max_off_p6_given_off_proj
+#         # end debugging
+        
+        # update offsets_avail to remove max offset use
+        offsets_avail += -1 * max_off_p6_given_off_proj
+        offsets_used_in_completed_periods += max_off_p6_given_off_proj
+        
+#         print(f"show offsets_avail after p6 retirements: {offsets_avail}") # for db
+#         print() # for db
+        
     else:
         pass
 
     # ~~~~~~~~~~~~~~~~~~~~
-    if off_avail_cum.sum() > 0:
-        prmt.excess_offsets = off_avail_cum.at[2030]
+    # after assuming max offset use, see if any offsets remaining in offsets_avail
+    # if so, these are excess offsets
+    # show warning only if the excess is significant (> 5 MMTCO2e)
+    # note: when offset settings at 100% of limit, there can be ~3 M excess 
+    # this is due to mismatches in timing of offset supply and compliance obligations
+    if offsets_avail > 5: # units MMTCO2e
+        prmt.excess_offsets = offsets_avail
         
         # round off for display
         excess_int = int(round(prmt.excess_offsets, 0))
@@ -7328,7 +7447,9 @@ def supply_demand_calculations():
     allow_vintaged_cumul = df['quant']
     allow_vintaged_cumul.name = 'allow_vintaged_cumul'
     
-    allow_vint_ann = allow_vintaged_cumul.copy().diff()
+    # get historical data
+    # insert value for initial quarter (since diff turns that into NaN)
+    allow_vint_ann = allow_vintaged_cumul.diff()
     first_year = allow_vint_ann.index.min()
     allow_vint_ann.at[first_year] = allow_vintaged_cumul.at[first_year]
     allow_vint_ann.name = 'allow_vint_ann'
@@ -7359,6 +7480,8 @@ def supply_demand_calculations():
     allow_nonvint_cumul = df['quant']
     allow_nonvint_cumul.name = 'allow_nonvint_cumul'
 
+    # get historical data
+    # insert value for initial quarter (since diff turns that into NaN)
     allow_nonvint_ann = allow_nonvint_cumul.diff()
     first_year = allow_nonvint_ann.index.min()
     allow_nonvint_ann.at[first_year] = allow_nonvint_cumul.at[first_year]
@@ -7366,7 +7489,13 @@ def supply_demand_calculations():
 
     # ~~~~~~~~~~~~~~
     # OFFSET SUPPLY:
-    offsets_sold_ann = offsets_projection()   
+    offsets_supply_q, offsets_supply_ann = offsets_projection()
+    
+    # calculation of excess offsets beyond what could be used
+    # (depends on temporal pattern of when offsets are added to supply)
+    # sets prmt.excess_offsets
+    excess_offsets_calc(offsets_supply_q)
+
     # ~~~~~~~~~~~~~~
     
     # BANKING METRIC: calculation
@@ -7377,20 +7506,63 @@ def supply_demand_calculations():
     
     dfs_to_concat = [allow_vint_ann,
                      allow_nonvint_ann,
-                     offsets_sold_ann,
+                     offsets_supply_ann,
                      prmt.emissions_ann,
                      emissions_ann_neg]
     bank_elements = pd.concat(dfs_to_concat, axis=1)
     
     bank_elements['bank_ann'] = bank_elements[['allow_vint_ann', 
                                                'allow_nonvint_ann',
-                                               'offsets_sold_ann', 
+                                               'offsets_supply_ann', 
                                                'emissions_ann_neg']].sum(axis=1)
 
     bank_elements = bank_elements.drop('emissions_ann_neg', axis=1)
     
     bank_elements['bank_cumul'] = bank_elements['bank_ann'].cumsum()
+    
+    # ~~~~~~~~~~~~~~
+    # RESERVE SALES (& MODIFY BANKING METRIC)
+    bank_cumul = bank_elements['bank_cumul']
+    # here, bank_cumul_pos still could have negative values; below, those are overwritten with zeros
 
+    reserve_sales_cumul = pd.Series() # initialize
+    
+    for year in bank_cumul.index:
+        if bank_cumul.at[year] < 0:
+            if year == 2013:
+                reserve_sales_cumul.at[year] = -1 * bank_cumul.at[year]
+                # (here, bank_cumul in the year is neg, reserve sales are positive)
+                
+            else: # year > 2013:                
+                # if bank is negative, put those into reserve_sales
+                # add to cumulative reserve sales over time
+                reserve_sales_cumul.at[year] = reserve_sales_cumul.at[year-1] + (-1 * bank_cumul.at[year])
+                # (here, bank_cumul in the year is neg, reserve sales are positive)
+            
+            # add *annual* reserve sales to bank_cumul, for all years from year to end
+            # get annual reserves sales using diff of cumulative reserve sales
+            for revision_year in range(year, bank_cumul.index.max()+1):
+                bank_cumul.at[revision_year] = bank_cumul.at[revision_year] + reserve_sales_cumul.diff().at[year]
+                # (here, bank_cumul in the year is neg, reserve sales are positive)
+    
+        else:
+            if year == 2013:
+                reserve_sales_cumul.at[year] = 0
+                
+            else: # year > 2013:
+                # if bank is positive, leave bank as is, and cumulative reserve sales are same as previous year
+                reserve_sales_cumul.at[year] = reserve_sales_cumul.at[year-1]
+    
+    reserve_sales = reserve_sales_cumul
+
+    # create version of bank with only positive values (and if not positive, then zero)
+    bank_cumul_pos = bank_cumul.copy()
+    for year in bank_cumul.index:
+        if bank_cumul.at[year] < 0:
+            bank_cumul_pos.at[year] == 0
+        else:
+            pass
+    
     # ~~~~~~~~~~~~~~
     # BALANCE METRIC: bank + unsold current allowances
     # note there are also allowances not in gen_acct or comp_acct:
@@ -7421,30 +7593,9 @@ def supply_demand_calculations():
     supply_ann = pd.concat([
         allow_vint_ann,
         allow_nonvint_ann,
-        offsets_sold_ann], 
+        offsets_supply_ann], 
         axis=1).sum(axis=1)
     supply_ann.name = 'supply_ann'
-    
-    # ~~~~~~~~~~~~~~
-    # RESERVE SALES
-    bank_cumul_pos = bank_elements['bank_cumul']
-    # here, bank_cumul_pos still could have negative values; below, those are overwritten with zeros
-
-    reserve_sales_cumul = pd.Series() # initialize
-    # reserve sales are negative quantities here    
-    
-    for year in bank_cumul_pos.index:
-        if bank_cumul_pos.at[year] < 0:
-            # if bank is negative, put those into reserve_sales
-            reserve_sales_cumul.at[year] = bank_cumul_pos.at[year]
-            
-            # overwrite bank_cumul with zero for that year
-            bank_cumul_pos.at[year] = float(0)
-        else:
-            # if bank is positive, leave bank as is, and set reserve sales to zero
-            reserve_sales_cumul.at[year] = float(0)
-    
-    reserve_sales = reserve_sales_cumul
     
     # ~~~~~~~~~~~~
     # set attributes 
@@ -7710,9 +7861,10 @@ def create_figures():
     
     legend = Legend(items=[('covered emissions (historical)', [em_CAQC_line_hist]),
                            ('covered emissions (projection)', [em_CAQC_line_proj]),
-                           ('instrument supply (historical)', [sup_off_CAQC_line_hist]),
-                           ('instrument supply (projection)', [sup_off_CAQC_line_proj]),
+                           ('instrument supply* (historical)', [sup_off_CAQC_line_hist]),
+                           ('instrument supply* (projection)', [sup_off_CAQC_line_proj]),
                            ('caps', [cap_CAQC_line]),
+                           ('*supply shown here does not include reserve sales', [])
                           ],
                     label_text_font_size="14px",
                     location=(0, 0),
@@ -7728,11 +7880,13 @@ def create_figures():
     # set y_max using balance_source, where balance is bank + unsold
     y_max = (int(prmt.balance.max() / 100) + 1) * 100
 
-    if prmt.reserve_sales.min() == 0:
+    if prmt.reserve_sales.max() == 0:
         y_min = 0
     else:
-        # then abs(prmt.reserve_sales.min()) > 0
-        y_min = (int(prmt.reserve_sales.min() / 100) - 1) * 100
+        # prmt.reserve_sales is always positive,
+        # but reserve sales shown in graph are negative values, 
+        # so need inverse of the max for this calculation of y_min
+        y_min = (int(-1 * prmt.reserve_sales.max() / 100) - 1) * 100
 
     p2 = figure(title='private bank and unsold allowances (cumulative)',
                                    height = 600, width = 700,
@@ -7767,7 +7921,7 @@ def create_figures():
                         line_width=0.5, line_color='dimgray')
 
     reserve_vbar = p2.vbar(prmt.reserve_sales.index,
-                           top=prmt.reserve_sales,
+                           top=-1 * prmt.reserve_sales, # change to negative values
                            width=1,
                            color='tomato',
                            line_width=0.5, line_color='dimgray')
@@ -8249,8 +8403,6 @@ def create_export_df():
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # add warning about reverting to default auctions
     
-    
-    # SANDBOX:
     for element_num in range(len(prmt.error_msg_post_refresh)):
         if 'No years selected for auctions with unsold allowances' in prmt.error_msg_post_refresh[element_num]:
             metadata_list_of_tuples += [
@@ -8277,16 +8429,16 @@ def create_export_df():
     emissions_export.name = 'CA-QC covered emissions [MMTCO2e/year]'
     
     supply_export = prmt.supply_ann.copy()
-    supply_export.name = 'instrument supply additions [MMTCO2e/year]'
+    supply_export.name = 'instrument supply additions (excluding reserve sales) [MMTCO2e/year]'
     
     bank_export = prmt.bank_cumul_pos.copy()
-    bank_export.name = 'banked instruments [MMTCO2e]'
+    bank_export.name = 'banked instruments (cumulative, at end of year) [MMTCO2e]'
     
     unsold_export = prmt.unsold_auct_hold_cur_sum.copy()
-    unsold_export.name = 'unsold allowances of current vintage or earlier [MMTCO2e]'
+    unsold_export.name = 'unsold allowances of current vintage or earlier (remaining at end of year) [MMTCO2e]'
     
-    reserve_export = -1 * prmt.reserve_sales.copy()
-    reserve_export.name = 'reserve sales [MMTCO2e]'
+    reserve_export = prmt.reserve_sales.copy()
+    reserve_export.name = 'reserve sales (cumulative, at end of year) [MMTCO2e]'
     
     export_df = pd.concat([emissions_export, 
                            supply_export,
@@ -8477,7 +8629,7 @@ save_csv_button.on_click(save_csv_on_click)
 if __name__ == '__main__':    
     show(prmt.Fig_1_2)
     
-    # show supply-demand button & save csv buttong
+    # show supply-demand button & save csv button
     display(widgets.HBox([supply_demand_button, save_csv_button]))
 
 
@@ -8536,39 +8688,39 @@ if __name__ == '__main__':
 # In[ ]:
 
 
-# if __name__ == '__main__':
-#     save_timestamp = time.strftime('%Y-%m-%d_%H%M', time.localtime())
+if __name__ == '__main__':
+    save_timestamp = time.strftime('%Y-%m-%d_%H%M', time.localtime())
 
-#     if prmt.run_hindcast == True:    
+    if prmt.run_hindcast == True:    
         
-#         # collect the snaps, select only Q4
-#         df = pd.concat(scenario_CA.snaps_end + scenario_QC.snaps_end, axis=0, sort=False)
-#         snaps_end_Q4_CA_QC = df.loc[df['snap_q'].dt.quarter==4].copy()
+        # collect the snaps, select only Q4
+        df = pd.concat(scenario_CA.snaps_end + scenario_QC.snaps_end, axis=0, sort=False)
+        snaps_end_Q4_CA_QC = df.loc[df['snap_q'].dt.quarter==4].copy()
 
-#         if prmt.years_not_sold_out == () and prmt.fract_not_sold == 0:
-#             # export as "all sell out (hindcast)"
-#             snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC all sell out (hindcast) {save_timestamp}.csv")
+        if prmt.years_not_sold_out == () and prmt.fract_not_sold == 0:
+            # export as "all sell out (hindcast)"
+            snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC all sell out (hindcast) {save_timestamp}.csv")
         
-#         else: 
-#             # export as "some unsold (hindcast)"
-#             snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC some unsold (hindcast) {save_timestamp}.csv")
+        else: 
+            # export as "some unsold (hindcast)"
+            snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC some unsold (hindcast) {save_timestamp}.csv")
 
-#     else: # prmt.run_hindcast == False
-#         try:
-#             # collect the snaps, select only Q4
-#             df = pd.concat(scenario_CA.snaps_end + scenario_QC.snaps_end, axis=0, sort=False)
-#             snaps_end_Q4_CA_QC = df.loc[df['snap_q'].dt.quarter==4].copy()
+    else: # prmt.run_hindcast == False
+        try:
+            # collect the snaps, select only Q4
+            df = pd.concat(scenario_CA.snaps_end + scenario_QC.snaps_end, axis=0, sort=False)
+            snaps_end_Q4_CA_QC = df.loc[df['snap_q'].dt.quarter==4].copy()
             
-#             if prmt.years_not_sold_out == () and prmt.fract_not_sold == 0:
-#                 # export as "all sell out (not hindcast)"
-#                 snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC all sell out (not hindcast) {save_timestamp}.csv")
-#             else:
-#                 # export as "some unsold (not hindcast)
-#                 snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC some unsold (not hindcast) {save_timestamp}.csv")
-#         except:
-#             # no results; initial run using defaults, so snaps are empty
-#             # export would just be the same as prmt.snaps_end_Q4
-#             pass
+            if prmt.years_not_sold_out == () and prmt.fract_not_sold == 0:
+                # export as "all sell out (not hindcast)"
+                snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC all sell out (not hindcast) {save_timestamp}.csv")
+            else:
+                # export as "some unsold (not hindcast)
+                snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC some unsold (not hindcast) {save_timestamp}.csv")
+        except:
+            # no results; initial run using defaults, so snaps are empty
+            # export would just be the same as prmt.snaps_end_Q4
+            pass
 
 
 # In[ ]:
