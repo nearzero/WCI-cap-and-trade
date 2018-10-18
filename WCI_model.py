@@ -30,13 +30,53 @@
 # In[ ]:
 
 
-import pandas as pd
-from pandas.tseries.offsets import *
-import numpy as np
-
 import ipywidgets as widgets
 from IPython.core.display import display # display used for widgets and for hiding code cells
 from IPython.display import clear_output, Javascript # Javascript is for csv save
+
+def create_progress_bar_loading():
+    # define class Progress_bar
+    class Progress_bar_loading:
+        bar = ""    
+
+        def __init__(self, wid):
+            self.wid = wid # object will be instantiated using iPython widget as wid
+
+        def create_progress_bar(wid):
+            progress_bar = Progress_bar_loading(wid)
+            return progress_bar
+
+    # create objects
+    progress_bar_loading = Progress_bar_loading.create_progress_bar(
+        widgets.IntProgress(
+            value=0, # initialize
+            min=0,
+            max=6,
+            step=1,
+            description='Loading:',
+            bar_style='', # 'success', 'info', 'warning', 'danger' or ''
+            orientation='horizontal',
+        ))
+
+    return(progress_bar_loading)
+
+
+# In[ ]:
+
+
+progress_bar_loading = create_progress_bar_loading()
+display(progress_bar_loading.wid)
+
+
+# In[ ]:
+
+
+progress_bar_loading.wid.value += 1
+print("importing libraries") # potential for progress_bar_loading
+
+import pandas as pd
+from pandas.tseries.offsets import *
+import numpy as np
 
 import time
 # from time import sleep
@@ -233,10 +273,25 @@ prmt = Prmt()
 # In[ ]:
 
 
-# for testing using private repo, ensure download of input file from the private repo
-if os.getcwd() == '/Users/masoninman/Dropbox/WCI-Private':
+# for testing using private repo or branch of public repo, ensure download of input file from correct location
+
+if os.getcwd() == "/Users/masoninman/Dropbox/WCI-Private":
+    # working within private repo
+    
     # override prmt.blob_master
     prmt.blob_master = "/Users/masoninman/Dropbox/WCI-Private"
+    
+    # override prmt.input_file_raw_url_short to remove suffix "?raw=true"
+    prmt.input_file_raw_url_short = "/data/data_input_file.xlsx"
+    
+    # override CIR file url to remove suffix "?raw=true"
+    prmt.CIR_raw_url_short = "/data/CIR_file.xlsx"
+    
+elif os.getcwd() == "/Users/masoninman/Dropbox/WCI-cap-and-trade":
+    # working within local clone of public repo
+    
+    # override prmt.blob_master
+    prmt.blob_master = "/Users/masoninman/Dropbox/WCI-cap-and-trade"
     
     # override prmt.input_file_raw_url_short to remove suffix "?raw=true"
     prmt.input_file_raw_url_short = "/data/data_input_file.xlsx"
@@ -249,6 +304,10 @@ if os.getcwd() == '/Users/masoninman/Dropbox/WCI-Private':
 
 
 def load_input_files():
+    
+    progress_bar_loading.wid.value += 1
+    print("importing data") # potential for progress_bar_loading
+    
     # download each file once from Github, set each as an attribute of object prmt
 
     # main input_file
@@ -265,10 +324,10 @@ def load_input_files():
     # CIR quarterly
     try:
         prmt.CIR_excel = pd.ExcelFile(prmt.CIR_raw_url_short)
-        logging.info("downloaded CIR file from short url")
+        logging.info("downloaded CIR file using short url")
     except:
         prmt.CIR_excel = pd.ExcelFile(prmt.blob_master + prmt.CIR_raw_url_short)
-        logging.info("downloaded CIR file from full url")
+        logging.info("downloaded CIR file using full url")
 
 
 # In[ ]:
@@ -326,10 +385,10 @@ prmt.CA_cap_adjustment_factor = prmt.CA_cap_data[
 # In[ ]:
 
 
-# from WCI_model_explainer_text_v2.py (2018-10-10)
+# modified slightly from WCI_model_explainer_text_v2.py (2018-10-10)
 
-figure_explainer_text = "<p>Below, the figure on the left shows covered emissions compared with the supply of compliance instruments (allowances and offsets) that enter private market participants’ accounts through auction sales or direct allocations from WCI governments.</p><br><p>The model tracks the private bank of allowances, defined as the number of allowances held in private accounts in excess of compliance obligations those entities face under the program in any given year. When the supply of compliance instruments entering private accounts is greater than covered emissions in a given year, the private bank increases. When the supply of compliance instruments entering private accounts is less than covered emissions, the private bank decreases.</p><br><p>The figure on the right shows the running total of compliance instruments banked in private accounts. In addition, the graph shows any allowances that went unsold in auctions. These allowances are held in government accounts until they are either reintroduced at a later auction or removed from the normal auction supply subject to market rules.</p><br><p>If the private bank is exhausted, the model simulates reserve sales to meet any remaining outstanding compliance obligations, based on the user-defined emissions projection. Starting in 2021, if the supply of allowances held in government-controlled reserve accounts is exhausted, then an unlimited quantity of instruments called “price ceiling units” will be available at a price ceiling to meet any remaining compliance obligations. The model tracks the sale of reserve allowances and price ceiling units in a single composite category.</p><br><p>For more information about the banking metric used here, see Near Zero's Sep. 2018 report, <a href='http://www.nearzero.org/wp/2018/09/12/tracking-banking-in-the-western-climate-initiative-cap-and-trade-program/' target='_blank'>Tracking Banking in the Western Climate Initiative Cap-and-Trade Program</a href>.</p>"
-
+figure_explainer_text = "<p>Above, the figure on the left shows covered emissions compared with the supply of compliance instruments (allowances and offsets) that enter private market participants’ accounts through auction sales or direct allocations from WCI governments.</p><br><p>The model tracks the private bank of allowances, defined as the number of allowances held in private accounts in excess of compliance obligations those entities face under the program in any given year. When the supply of compliance instruments entering private accounts is greater than covered emissions in a given year, the private bank increases. When the supply of compliance instruments entering private accounts is less than covered emissions, the private bank decreases.</p><br><p>The figure on the right shows the running total of compliance instruments banked in private accounts. In addition, the graph shows any allowances that went unsold in auctions. These allowances are held in government accounts until they are either reintroduced at a later auction or removed from the normal auction supply subject to market rules.</p><br><p>If the private bank is exhausted, the model simulates reserve sales to meet any remaining outstanding compliance obligations, based on the user-defined emissions projection. Starting in 2021, if the supply of allowances held in government-controlled reserve accounts is exhausted, then an unlimited quantity of instruments called “price ceiling units” will be available at a price ceiling to meet any remaining compliance obligations. The model tracks the sale of reserve allowances and price ceiling units in a single composite category.</p><br><p>For more information about the banking metric used here, see Near Zero's Sep. 2018 report, <a href='http://www.nearzero.org/wp/2018/09/12/tracking-banking-in-the-western-climate-initiative-cap-and-trade-program/' target='_blank'>Tracking Banking in the Western Climate Initiative Cap-and-Trade Program</a href>.</p>"
+# changed text to "Above" when moving the accordion to below the figure
 # ~~~~~~~~~~~~~~~~~~
 
 em_explainer_text = "<p>The WCI cap-and-trade program covers emissions from electricity suppliers, large industrial facilities, and natural gas and transportation fuel distributors.</p><br><p>By default, the model uses a projection in which covered emissions decrease 2% per year, starting from emissions in 2016 (the latest year with official reporting data). Users can specify higher or lower emissions scenarios using the available settings.</p><br><p>A 2% rate of decline follows ARB's 2017 Scoping Plan scenario for California emissions, which includes the effects of prescriptive policy measures (e.g., the Renewables Portfolio Standard for electricity), but does not incorporate effects of the cap-and-trade program.</p><br><p>Note that PATHWAYS, the model ARB used to generate the Scoping Plan scenario, does not directly project covered emissions in California. Instead, the PATHWAYS model tracks emissions from four economic sectors called “covered sectors,” which together constitute about ~10% more emissions than the “covered emissions” that are actually subject to the cap-and-trade program in California. For more information, see Near Zero's May 2018 <a href='http://www.nearzero.org/wp/2018/05/07/ready-fire-aim-arbs-overallocation-report-misses-its-target/' target='_blank'>report on this discrepancy</a href>. Users can define their own emission projections to explore any scenario they like, as the model makes no assumptions about future emissions aside from what the user provides.</p>"
@@ -6125,6 +6184,9 @@ cq = Cq(quarter_period('2012Q4'))
 
 # update values in object prmt using functions
 
+progress_bar_loading.wid.value += 1
+print("getting data from input file") # potential for progress_bar_loading
+
 prmt.CA_cap = initialize_CA_cap()
 prmt.CA_APCR_MI = initialize_CA_APCR()
 prmt.CA_advance_MI = initialize_CA_advance()
@@ -6192,6 +6254,9 @@ get_QC_allocation_data()
 
 
 # DEFINE CLASSES, CREATE OBJECTS
+
+progress_bar_loading.wid.value += 1
+print("creating scenarios")
 
 # ~~~~~~~~~~~
 # initialization
@@ -6290,19 +6355,19 @@ off_pct_CA_adv3 = Off_pct([]) # period 3, i.e., 2026-2030
 off_pct_QC_adv3 = Off_pct([])
 
 # ~~~~~~~~~~~
-# define class Progress_bar
-class Progress_bar:
-    bar = ""    
-    
-    def __init__(self, wid):
-        self.wid = wid # object will be instantiated using iPython widget as wid
-        
-    def create_progress_bar(wid):
-        progress_bar = Progress_bar(wid)
-        return progress_bar
+
+class Progress_bar_auction:
+        bar = ""    
+
+        def __init__(self, wid):
+            self.wid = wid # object will be instantiated using iPython widget as wid
+
+        def create_progress_bar(wid):
+            progress_bar = Progress_bar_auction(wid)
+            return progress_bar
 
 # create objects
-progress_bar_CA = Progress_bar.create_progress_bar(
+progress_bar_CA = Progress_bar_auction.create_progress_bar(
     widgets.IntProgress(
         value=prmt.progress_bar_CA_count,
         min=0,
@@ -6313,7 +6378,7 @@ progress_bar_CA = Progress_bar.create_progress_bar(
         orientation='horizontal',
     ))
 
-progress_bar_QC = Progress_bar.create_progress_bar(
+progress_bar_QC = Progress_bar_auction.create_progress_bar(
     widgets.IntProgress(
         value=prmt.progress_bar_QC_count,
         min=0,
@@ -6394,6 +6459,9 @@ def initialize_all_accts():
     
     Or model may run as hindcast + forecast, in which case it repeats historical steps.
     """
+    
+    progress_bar_loading.wid.value += 1
+    print("initializing accounts") # potential for progress_bar_loading
     
     logging.info(f"{inspect.currentframe().f_code.co_name} (start)")
 
@@ -6759,6 +6827,9 @@ def emissions_projection():
     Model assumes QC will make same annual change as CA.
     """
     logging.info(f"{inspect.currentframe().f_code.co_name}")
+    
+    progress_bar_loading.wid.value += 1
+    print("creating emissions projection") # potential for progress_bar_loading
 
     cov_em_df = pd.read_excel(prmt.input_file, sheet_name='covered emissions')
     cov_em_df = cov_em_df.drop(['source CA', 'source QC', 'units'], axis=1)
