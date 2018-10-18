@@ -6185,7 +6185,6 @@ cq = Cq(quarter_period('2012Q4'))
 # update values in object prmt using functions
 
 progress_bar_loading.wid.value += 1
-print("getting data from input file") # potential for progress_bar_loading
 
 prmt.CA_cap = initialize_CA_cap()
 prmt.CA_APCR_MI = initialize_CA_APCR()
@@ -6256,7 +6255,6 @@ get_QC_allocation_data()
 # DEFINE CLASSES, CREATE OBJECTS
 
 progress_bar_loading.wid.value += 1
-print("creating scenarios")
 
 # ~~~~~~~~~~~
 # initialization
@@ -6461,7 +6459,6 @@ def initialize_all_accts():
     """
     
     progress_bar_loading.wid.value += 1
-    print("initializing accounts") # potential for progress_bar_loading
     
     logging.info(f"{inspect.currentframe().f_code.co_name} (start)")
 
@@ -6829,7 +6826,6 @@ def emissions_projection():
     logging.info(f"{inspect.currentframe().f_code.co_name}")
     
     progress_bar_loading.wid.value += 1
-    print("creating emissions projection") # potential for progress_bar_loading
 
     cov_em_df = pd.read_excel(prmt.input_file, sheet_name='covered emissions')
     cov_em_df = cov_em_df.drop(['source CA', 'source QC', 'units'], axis=1)
