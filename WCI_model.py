@@ -7,7 +7,7 @@
 # 
 # ## Developed by [Near Zero](http://nearzero.org)
 # 
-# ### Version 1.0.2 (Oct 18, 2018)
+# ### Version 1.0.3 (Oct 26, 2018)
 # 
 # This model simulates the supply-demand balance of the Western Climate Initiative cap-and-trade program, jointly operated by California and Quebec.
 # 
@@ -145,7 +145,7 @@ class Prmt():
     
     def __init__(self):
         
-        self.model_version = '1.0.1'
+        self.model_version = '1.0.3'
         
         self.online_settings_auction = True # will be overridden below for testing; normally set by user interface
         self.years_not_sold_out = () # set by user interface
