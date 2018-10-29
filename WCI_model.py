@@ -7,8 +7,6 @@
 # 
 # ## Developed by [Near Zero](http://nearzero.org)
 # 
-# ### Version 1.0.3 (Oct 26, 2018)
-# 
 # This model simulates the supply-demand balance of the Western Climate Initiative cap-and-trade program, jointly operated by California and Quebec.
 # 
 # ---
@@ -34,37 +32,33 @@ import ipywidgets as widgets
 from IPython.core.display import display # display used for widgets and for hiding code cells
 from IPython.display import clear_output, Javascript # Javascript is for csv save
 
-def create_progress_bar_loading():
-    # define class Progress_bar
-    class Progress_bar_loading:
-        bar = ""    
-
-        def __init__(self, wid):
-            self.wid = wid # object will be instantiated using iPython widget as wid
-
-        def create_progress_bar(wid):
-            progress_bar = Progress_bar_loading(wid)
-            return progress_bar
-
-    # create objects
-    progress_bar_loading = Progress_bar_loading.create_progress_bar(
-        widgets.IntProgress(
-            value=0, # initialize
-            min=0,
-            max=6,
-            step=1,
-            description='Loading:',
-            bar_style='', # 'success', 'info', 'warning', 'danger' or ''
-            orientation='horizontal',
-        ))
-
-    return(progress_bar_loading)
-
 
 # In[ ]:
 
 
-progress_bar_loading = create_progress_bar_loading()
+# define class Progress_bar
+class Progress_bar_loading:
+    bar = ""    
+
+    def __init__(self, wid):
+        self.wid = wid # object will be instantiated using iPython widget as wid
+
+    def create_progress_bar(wid):
+        progress_bar = Progress_bar_loading(wid)
+        return progress_bar
+
+# create object
+progress_bar_loading = Progress_bar_loading.create_progress_bar(
+    widgets.IntProgress(
+        value=0, # initialize
+        min=0,
+        max=4, # from 0 to 4 is 5 steps
+        step=1,
+        description='Loading:',
+        bar_style='', # 'success', 'info', 'warning', 'danger' or ''
+        orientation='horizontal',
+    ))
+
 display(progress_bar_loading.wid)
 
 
@@ -72,7 +66,7 @@ display(progress_bar_loading.wid)
 
 
 progress_bar_loading.wid.value += 1
-print("importing libraries") # potential for progress_bar_loading
+print("importing libraries... ", end='') # potential for progress_bar_loading
 
 import pandas as pd
 from pandas.tseries.offsets import *
@@ -95,36 +89,35 @@ import logging
 
 import bokeh
 
-from bokeh.plotting import figure, show, output_notebook # save
-# from bokeh.models.tools import SaveTool
+from bokeh.plotting import figure, show, output_notebook
 from bokeh.models import Legend
 from bokeh.layouts import gridplot
 from bokeh.palettes import Viridis, Blues, YlOrBr # note: Viridis is a dict; viridis is a function
 
-# # for html markup box
-# from bokeh.io import output_file, show
-
-# use if working offline; also might help with Binder loading
+# use INLINE if working offline; also might help with Binder loading
 from bokeh.resources import INLINE
 
 output_notebook(resources=INLINE, hide_banner=True)
 # hide_banner gets rid of message "BokehJS ... successfully loaded"
 
-from bokeh.document import Document
-from bokeh.models.layouts import Column
+# from bokeh.document import Document
+# from bokeh.models.layouts import Column
 
 
 # In[ ]:
 
 
-# initialize logging
-save_timestamp = time.strftime('%Y-%m-%d_%H%M', time.localtime())
-
 # start logging
 # to save logs, need to update below with the correct strings and selection for your desired directory
+# need to make sure the folder exists, or else logs won't be saved
+
 try:
-    if os.getcwd().split('/')[4] == 'cap_and_trade_active_dev':
-        LOG_PATH = os.getcwd() + '/logs'
+    if os.getcwd().split('/')[1] == 'Users':
+        # create logging timestamp
+        save_timestamp = time.strftime('%Y-%m-%d_%H%M', time.localtime())
+
+        LOG_PATH = os.getcwd().rsplit('/', 1)[0] + '/WCI model logs'
+
         logging.basicConfig(filename=f"{LOG_PATH}/WCI_cap_trade_log_{save_timestamp}.txt", 
                             filemode='a',  # choices: 'w' or 'a'
                             level=logging.INFO)
@@ -132,6 +125,7 @@ try:
         # don't save log
         pass
 except:
+    # don't save log
     pass
 
 
@@ -306,7 +300,7 @@ elif os.getcwd() == "/Users/masoninman/Dropbox/WCI-cap-and-trade":
 def load_input_files():
     
     progress_bar_loading.wid.value += 1
-    print("importing data") # potential for progress_bar_loading
+    print("importing data... " , end='') # potential for progress_bar_loading
     
     # download each file once from Github, set each as an attribute of object prmt
 
@@ -1764,7 +1758,7 @@ def test_conservation_against_full_budget(all_accts, juris, parent_fn):
         # accounts than the total number of compliance instruments issued by those two jurisdictions alone."
   
         elif cq.date >= quarter_period('2018Q2') and cq.date <= quarter_period('2017Q4'):
-            # add Early Action allowances to budget
+            # add net flow of allowances to budget
             budget = 13.186967 # units: MMTCO2e
     
     else:
@@ -2380,15 +2374,14 @@ def process_CA_quarterly(all_accts):
         else:
             pass
 
-#         # for Q1, take snap (~Jan 5):
-#         # after transferring CA alloc out of ann_alloc_hold (Jan 1)
-#         # and before Q1 auctions (~Feb 15)  
-#         take_snapshot_CIR(all_accts, 'CA')
+        # for Q1, take snap (~Jan 5):
+        # after transferring CA alloc out of ann_alloc_hold (Jan 1)
+        # and before Q1 auctions (~Feb 15)  
+        take_snapshot_CIR(all_accts, 'CA')
     
     else: # cq.date.quarter != 1
-#         # for Q2-Q4, take snap before auction (no special steps at the start of each quarter)
-#         take_snapshot_CIR(all_accts, 'CA')
-        pass
+        # for Q2-Q4, take snap before auction (no special steps at the start of each quarter)
+        take_snapshot_CIR(all_accts, 'CA')
     
     # END OF START-OF-QUARTER STEPS
 
@@ -2578,18 +2571,17 @@ def process_QC_quarterly(all_accts):
         else:
             pass
 
-#         # for Q1, take snap (~Jan 5):
-#         # before transferring QC alloc out of ann_alloc_hold (~Jan 15)
-#         # and before Q1 auctions (~Feb 15)
-#         take_snapshot_CIR(all_accts, 'QC')
+        # for Q1, take snap (~Jan 5):
+        # before transferring QC alloc out of ann_alloc_hold (~Jan 15)
+        # and before Q1 auctions (~Feb 15)
+        take_snapshot_CIR(all_accts, 'QC')
 
         # start-of-year (Jan 15): transfer QC allocation, initial quantity (75% of estimated ultimate allocation)           
         all_accts = transfer_QC_alloc_init__from_alloc_hold(all_accts)
     
     else: # cq.date.quarter != 1
-#         # for Q2-Q4, take snap before auction (no special steps at the start of each quarter)
-#         take_snapshot_CIR(all_accts, 'QC')
-        pass
+        # for Q2-Q4, take snap before auction (no special steps at the start of each quarter)
+        take_snapshot_CIR(all_accts, 'QC')
     
     # END OF START-OF-QUARTER STEPS
 
@@ -5357,7 +5349,7 @@ def transfer_QC_alloc_trueups__from_alloc_hold(all_accts):
 def get_QC_inputs():
     logging.info(f"{inspect.currentframe().f_code.co_name} (start)")
     
-    # get record of retirements (by vintage) from compliance reports
+    # get cap values from input sheet (derived from regs)
     QC_cap_data = pd.read_excel(prmt.input_file, sheet_name='QC cap data')
 
     # get cap amounts from input file
@@ -6185,6 +6177,7 @@ cq = Cq(quarter_period('2012Q4'))
 # update values in object prmt using functions
 
 progress_bar_loading.wid.value += 1
+print("initializing data... " , end='') # potential for progress_bar_loading
 
 prmt.CA_cap = initialize_CA_cap()
 prmt.CA_APCR_MI = initialize_CA_APCR()
@@ -6255,6 +6248,7 @@ get_QC_allocation_data()
 # DEFINE CLASSES, CREATE OBJECTS
 
 progress_bar_loading.wid.value += 1
+print("creating scenarios... " , end='') # potential for progress_bar_loading
 
 # ~~~~~~~~~~~
 # initialization
@@ -6457,8 +6451,6 @@ def initialize_all_accts():
     
     Or model may run as hindcast + forecast, in which case it repeats historical steps.
     """
-    
-    progress_bar_loading.wid.value += 1
     
     logging.info(f"{inspect.currentframe().f_code.co_name} (start)")
 
@@ -7505,6 +7497,9 @@ def supply_demand_calculations():
     mask = (mask1) & (mask2)
     df = df.loc[mask]
 
+#     # export for debugging
+#     df.to_csv(os.getcwd() + '/' + 'supply_vintaged.csv')
+    
     # result contains allowances sold at advance and current auctions, as well as allowances freely allocated
 
     df = df.groupby('snap_yr').sum()
@@ -7541,6 +7536,9 @@ def supply_demand_calculations():
 
     mask = (mask1) & (mask2)
     df = df.loc[mask]
+    
+#     # export for debugging
+#     df.to_csv(os.getcwd() + '/' + 'supply_nonvintaged.csv')
 
     df = df.groupby('snap_yr').sum()
     df.index.name = 'snap_yr'
@@ -7586,6 +7584,9 @@ def supply_demand_calculations():
     bank_elements = bank_elements.drop('emissions_ann_neg', axis=1)
     
     bank_elements['bank_cumul'] = bank_elements['bank_ann'].cumsum()
+    
+#     # export for debugging
+#     bank_elements.to_csv(os.getcwd() + '/' + 'bank_elements.csv')
     
     # ~~~~~~~~~~~~~~
     # RESERVE SALES (& MODIFY BANKING METRIC)
@@ -8263,7 +8264,7 @@ def create_auction_tabs():
     # create auction settings: simple
     
     # create widget, which is just a text label; the user has no options
-    cap = "The default setting is that all auctions sell out.<br>To use this default assumption, leave this tab open."
+    cap = "The default setting is that all future auctions sell out.<br>To use this default assumption, leave this tab open."
     auction_simp_caption_col0 = widgets.HTML(value=cap)
     
     # TO DO: if we want to specify other pre-run scenarios besides all sell out,
@@ -8755,39 +8756,77 @@ if __name__ == '__main__':
 # In[ ]:
 
 
-if __name__ == '__main__':
-    save_timestamp = time.strftime('%Y-%m-%d_%H%M', time.localtime())
+# if __name__ == '__main__':
+#     save_timestamp = time.strftime('%Y-%m-%d_%H%M', time.localtime())
 
-    if prmt.run_hindcast == True:    
+#     if prmt.run_hindcast == True:    
         
-        # collect the snaps, select only Q4
-        df = pd.concat(scenario_CA.snaps_end + scenario_QC.snaps_end, axis=0, sort=False)
-        snaps_end_Q4_CA_QC = df.loc[df['snap_q'].dt.quarter==4].copy()
+#         # collect the snaps, select only Q4
+#         df = pd.concat(scenario_CA.snaps_end + scenario_QC.snaps_end, axis=0, sort=False)
+#         snaps_end_Q4_CA_QC = df.loc[df['snap_q'].dt.quarter==4].copy()
 
-        if prmt.years_not_sold_out == () and prmt.fract_not_sold == 0:
-            # export as "all sell out (hindcast)"
-            snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC all sell out (hindcast) {save_timestamp}.csv")
+#         if prmt.years_not_sold_out == () and prmt.fract_not_sold == 0:
+#             # export as "all sell out (hindcast)"
+#             snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC all sell out (hindcast) {save_timestamp}.csv")
         
-        else: 
-            # export as "some unsold (hindcast)"
-            snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC some unsold (hindcast) {save_timestamp}.csv")
+#         else: 
+#             # export as "some unsold (hindcast)"
+#             snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC some unsold (hindcast) {save_timestamp}.csv")
 
-    else: # prmt.run_hindcast == False
-        try:
-            # collect the snaps, select only Q4
-            df = pd.concat(scenario_CA.snaps_end + scenario_QC.snaps_end, axis=0, sort=False)
-            snaps_end_Q4_CA_QC = df.loc[df['snap_q'].dt.quarter==4].copy()
+#     else: # prmt.run_hindcast == False
+#         try:
+#             # collect the snaps, select only Q4
+#             df = pd.concat(scenario_CA.snaps_end + scenario_QC.snaps_end, axis=0, sort=False)
+#             snaps_end_Q4_CA_QC = df.loc[df['snap_q'].dt.quarter==4].copy()
             
-            if prmt.years_not_sold_out == () and prmt.fract_not_sold == 0:
-                # export as "all sell out (not hindcast)"
-                snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC all sell out (not hindcast) {save_timestamp}.csv")
-            else:
-                # export as "some unsold (not hindcast)
-                snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC some unsold (not hindcast) {save_timestamp}.csv")
-        except:
-            # no results; initial run using defaults, so snaps are empty
-            # export would just be the same as prmt.snaps_end_Q4
-            pass
+#             if prmt.years_not_sold_out == () and prmt.fract_not_sold == 0:
+#                 # export as "all sell out (not hindcast)"
+#                 snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC all sell out (not hindcast) {save_timestamp}.csv")
+#             else:
+#                 # export as "some unsold (not hindcast)
+#                 snaps_end_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_end_Q4_CA_QC some unsold (not hindcast) {save_timestamp}.csv")
+#         except:
+#             # no results; initial run using defaults, so snaps are empty
+#             # export would just be the same as prmt.snaps_end_Q4
+#             pass
+
+
+# In[ ]:
+
+
+# if __name__ == '__main__':
+#     save_timestamp = time.strftime('%Y-%m-%d_%H%M', time.localtime())
+
+#     if prmt.run_hindcast == True:    
+        
+#         # collect the snaps, select only Q4
+#         df = pd.concat(scenario_CA.snaps_CIR + scenario_QC.snaps_CIR, axis=0, sort=False)
+#         snaps_CIR_Q4_CA_QC = df.loc[df['snap_q'].dt.quarter==4].copy()
+
+#         if prmt.years_not_sold_out == () and prmt.fract_not_sold == 0:
+#             # export as "all sell out (hindcast)"
+#             snaps_CIR_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_CIR_Q4_CA_QC all sell out (hindcast) {save_timestamp}.csv")
+        
+#         else: 
+#             # export as "some unsold (hindcast)"
+#             snaps_CIR_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_CIR_Q4_CA_QC some unsold (hindcast) {save_timestamp}.csv")
+
+#     else: # prmt.run_hindcast == False
+#         try:
+#             # collect the snaps, select only Q4
+#             df = pd.concat(scenario_CA.snaps_CIR + scenario_QC.snaps_CIR, axis=0, sort=False)
+#             snaps_CIR_Q4_CA_QC = df.loc[df['snap_q'].dt.quarter==4].copy()
+            
+#             if prmt.years_not_sold_out == () and prmt.fract_not_sold == 0:
+#                 # export as "all sell out (not hindcast)"
+#                 snaps_CIR_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_CIR_Q4_CA_QC all sell out (not hindcast) {save_timestamp}.csv")
+#             else:
+#                 # export as "some unsold (not hindcast)
+#                 snaps_CIR_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_CIR_Q4_CA_QC some unsold (not hindcast) {save_timestamp}.csv")
+#         except:
+#             # no results; initial run using defaults, so snaps are empty
+#             # export would just be the same as prmt.snaps_CIR_Q4
+#             pass
 
 
 # In[ ]:
@@ -8799,6 +8838,380 @@ if __name__ == '__main__':
 #     avail_accum_all = pd.concat([scenario_CA.avail_accum, scenario_QC.avail_accum], axis=0, sort=False)
     
 #     avail_accum_all.to_csv(os.getcwd() + '/' + f"avail_accum_all all sell out {save_timestamp}.csv")
+
+
+# ## comparison to Compliance Instrument Report (CIR)
+
+# In[ ]:
+
+
+if __name__ == '__main__':
+    save_timestamp = time.strftime('%Y-%m-%d_%H%M', time.localtime())
+
+    if prmt.run_hindcast == True:    
+        
+        # collect the snaps, select only Q4
+        df = pd.concat(scenario_CA.snaps_CIR + scenario_QC.snaps_CIR, axis=0, sort=False)
+        snaps_CIR_Q4_CA_QC = df.loc[df['snap_q'].dt.quarter==4].copy()
+
+        if prmt.years_not_sold_out == () and prmt.fract_not_sold == 0:
+            # export as "all sell out (hindcast)"
+            snaps_CIR_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_CIR_Q4_CA_QC all sell out (hindcast) {save_timestamp}.csv")
+        
+        else: 
+            # export as "some unsold (hindcast)"
+            snaps_CIR_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_CIR_Q4_CA_QC some unsold (hindcast) {save_timestamp}.csv")
+
+    else: # prmt.run_hindcast == False
+        try:
+            # collect the snaps, select only Q4
+            df = pd.concat(scenario_CA.snaps_CIR + scenario_QC.snaps_CIR, axis=0, sort=False)
+            snaps_CIR_Q4_CA_QC = df.loc[df['snap_q'].dt.quarter==4].copy()
+            
+            if prmt.years_not_sold_out == () and prmt.fract_not_sold == 0:
+                # export as "all sell out (not hindcast)"
+                snaps_CIR_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_CIR_Q4_CA_QC all sell out (not hindcast) {save_timestamp}.csv")
+            else:
+                # export as "some unsold (not hindcast)
+                snaps_CIR_Q4_CA_QC.to_csv(os.getcwd() + '/' + f"snaps_CIR_Q4_CA_QC some unsold (not hindcast) {save_timestamp}.csv")
+        except:
+            # no results; initial run using defaults, so snaps are empty
+            # export would just be the same as prmt.snaps_CIR_Q4
+            pass
+
+
+# In[ ]:
+
+
+def turn_snap_into_CIR(yr_quart_period, snaps):
+    """
+    FILL IN DOCSTRING
+    
+    yr_quart_period: date of snap, as labeled by regulators; formatted as quarterly period
+    
+    Note that snaps are actually taken early in the following quarter,
+    i.e., 2014Q4 snap is taken in early 2015Q1.
+    
+    DataFrame snaps that is argument is snaps_CAQC.
+    """
+    
+    # select particular quarter to convert to CIR
+    df = snaps[snaps.index.get_level_values('snap_q')==yr_quart_period]
+    
+    # APCR: change vintage to 'APCR'
+    mask = df.index.get_level_values('inst_cat').str.contains('APCR') # also gets 'QC_alloc_2016_APCR'
+    APCR = df.loc[mask]
+    mapping_dict = {'vintage': 'APCR'}
+    APCR = multiindex_change(APCR, mapping_dict)
+    
+    # recombine APCR & non-APCR
+    df = df.loc[~mask].append(APCR)
+    
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Early Action (aka Early Reduction): change vintage to be 'early_action'
+    mask = df.index.get_level_values('inst_cat')=='early_action'
+    early_action = df.loc[mask]
+    mapping_dict = {'vintage': 'early_action'}
+    early_action = multiindex_change(early_action, mapping_dict)
+    
+    # recombine Early Action and non-Early Action
+    df = df.loc[~mask].append(early_action)
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    
+    # combine alloc_hold, ann_alloc_hold, and auct_hold into one group ('A_I_A')
+    # ('A_I_A' is shorthand for column in Compliance Instrument Report "Auction + Issuance + Allocation")
+    # note: issuance account is only for offsets, which are not in snaps
+    mask = df.index.get_level_values('acct_name').isin(['alloc_hold', 'ann_alloc_hold', 'auct_hold'])
+    A_I_A = df.loc[mask]
+    mapping_dict = {'acct_name': 'A_I_A'}
+    A_I_A = multiindex_change(A_I_A, mapping_dict)
+    
+    # recombine A_I_A and rest
+    df = df.loc[~mask].append(A_I_A)
+    
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # combine gen_acct & comp_acct, because we can't identify a priori reasons for moves
+    # can only recreate observed moves
+    # so it is useful to compare total of gen_acct + comp_acct in historical record vs. model
+    mask = df.index.get_level_values('acct_name').isin(['gen_acct', 'comp_acct'])
+    gen_comp = df.loc[mask]
+    mapping_dict = {'acct_name': 'gen_comp'}
+    gen_comp = multiindex_change(gen_comp, mapping_dict)
+    
+    # recombine gen_comp and rest
+    df = df.loc[~mask].append(gen_comp)
+    
+    # groupby sum to combine all allowances of a particular vintage, or particular type of non-vintage (i.e., APCR)
+    df = df.groupby(['acct_name', 'vintage']).sum()
+    
+    # reshape
+    df = df.unstack(0)
+    df.columns = df.columns.droplevel(0)
+    
+    allowances_modeled = df
+    
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # OFFSETS: HISTORICAL
+    # add historical offset data from CIR of specified quarter
+
+    if yr_quart_period.year == 2013:
+        print("This function doesn't yet handle year 2013.") 
+        
+    if yr_quart_period.year > 2013:
+        df2 = prmt.CIR_offsets_q_sums.loc[prmt.CIR_offsets_q_sums.index==yr_quart_period]
+
+        # TEST: should only be a single row
+        if len(df2) != 1:
+            print(f"{prmt.test_failed_msg} Selection of offsets did not return a single row.")
+            if len(df2) == 0:
+                print(f"{prmt.test_failed_msg} Selection of offsets returned zero rows.")
+            elif len(df2) > 1:
+                print(f"{prmt.test_failed_msg} Selection of offsets returned more than 1 row.")
+            else:
+                print(f"{prmt.test_failed_msg} Selection of offsets had some other error; check into it.")
+        else:
+            pass
+        # END OF TEST
+
+        if len(df2) == 1:
+            df2 = df2.drop('subtotal', axis=1)
+            df2 = df2.rename(columns={'Auction + Issuance + Allocation': 'A_I_A',
+                                      'Compliance': 'comp_acct', 
+                                      'Environmental Integrity (QC)': 'env_integrity', 
+                                      'General': 'gen_acct', 
+                                      'Limited Use Holding Account (CA)': 'limited_use', 
+                                      'Reserve': 'APCR_acct', 
+                                      'Invalidation': 'invalidation',
+                                      'Voluntary Renewable Electricity (CA)': 'VRE_acct', 
+                                      'Retirement': 'retirement'})
+
+            # change index that is date of CIR report into metadata indicating that these are offsets
+            df2.index = ['offsets']
+
+            df2['gen_comp'] = df2[['gen_acct', 'comp_acct']].sum(axis=1)
+            df2 = df2.drop(['gen_acct', 'comp_acct'], axis=1)
+
+            offsets_hist = df2
+
+        else:
+            # don't create offsets_hist; line below will hit error, because offsets_hist not defined
+            pass
+
+    
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # RECOMBINE:
+    CIR_snap = pd.concat([allowances_modeled, offsets_hist], sort=True)
+    
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    
+    CIR_snap['subtotal'] = CIR_snap.sum(axis=1)
+    
+    # add columns with NaN (if any are missing from list above)
+    for col in prmt.CIR_columns:
+        if col not in CIR_snap.columns:
+            CIR_snap[col] = np.NaN
+    
+    # reorder columns & change index type to str
+    CIR_snap = CIR_snap.reindex(columns=prmt.CIR_columns)
+    CIR_snap.index = CIR_snap.index.astype(str)
+    
+    # fill all NaN with zeros
+    CIR_snap = CIR_snap.fillna(0.0)
+    
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # RETIREMENTS (only for allowances)
+    
+    df = prmt.compliance_events.copy()
+    df = df.loc[df.index.get_level_values('vintage or type')!='offsets']
+    df = df.loc[df.index.get_level_values('compliance_date')<=yr_quart_period]
+    
+    print(df) # for db
+    
+    for row in df.index:
+        # get vintage and quantity
+        vintage = row[1]
+        retired = df.at[row, 'quant']
+        
+        # for specified vintage, transfer that quantity from gen_comp to retirement
+        CIR_snap.at[vintage, 'gen_comp'] = CIR_snap.at[vintage, 'gen_comp'] - retired
+        CIR_snap.at[vintage, 'retirement'] = CIR_snap.at[vintage, 'retirement'] + retired
+    
+    return(CIR_snap)
+
+
+# In[ ]:
+
+
+def compare_CIR_model_minus_hist(snap_CIR_q, CIR_historical, snaps):
+    """
+    Compares model recreation of Compliance Instrument Report (CIR) against historical data.
+    
+    Difference calculated is model value minus historical value.
+    
+    snap_CIR_q: date of snap, as labeled by regulators; formatted as string, i.e., '2017Q4'
+    """
+    
+    oldest_CIR = CIR_historical.index.get_level_values('date').min()
+    newest_CIR = CIR_historical.index.get_level_values('date').max()
+    
+    snap_CIR_q_period = quarter_period(snap_CIR_q)
+    # note: for equals comparisons, can use string version, i.e., year_quart == 'date'
+    # but for > or < comparisons, need to use period version, i.e., year_quart_period = date_period_var
+    
+    if snap_CIR_q_period >= oldest_CIR and snap_CIR_q_period <= newest_CIR:
+        
+        if snap_CIR_q_period == quarter_period('2017Q4') or snap_CIR_q_period == quarter_period('2018Q1'):
+            print("*"*90)
+            print("Warning" + "! Ontario allowance budget included in CIR for 2017Q4 and 2018Q1, but not included in model all_accts.")
+            print("*"*90)
+        # MODEL ************
+        
+        # run fn turn_snap_into_CIR
+        CIR_model_snap_CIR_q = turn_snap_into_CIR(snap_CIR_q_period, snaps)
+        
+        # HISTORICAL ************
+        
+        # create version of CIR_historical that can be compared directly with CIR_model above
+        # (then for a particular quarter, can subtract one df from the other to see difference for each cell)
+
+        df = CIR_historical.copy()
+        df = df.reset_index()
+
+        non_vintage_map = {'Non-Vintage Québec Early Action Allowances (QC)': 'early_action', 
+                           'Non-Vintage Price Containment Reserve Allowances': 'APCR'}
+        df['Description'] = df['Description'].replace(non_vintage_map)
+
+        df['Vintage'] = df['Vintage'].astype(str)
+        for row in df.index:
+            if df.at[row, 'Vintage'] == '1990':
+                description = df.at[row, 'Description']
+                df.at[row, 'Vintage'] = description
+
+        df = df.drop('Description', axis=1)
+
+        df['Vintage'] = df['Vintage'].replace('n/a', 'offsets')
+
+        df = df.set_index(['date', 'Vintage'])
+
+        # df = df.drop(['Total', 'Total of each vintage'], axis=1)
+
+        # rename columns
+        df = df.rename(columns={'Auction + Issuance + Allocation': 'A_I_A', 
+                                'Compliance': 'comp_acct', 
+                                'Environmental Integrity (QC)': 'env_integrity', 
+                                'General': 'gen_acct', 
+                                'Limited Use Holding Account (CA)': 'limited_use', 
+                                'Reserve': 'APCR_acct', 
+                                'Invalidation': 'invalidation',
+                                'Voluntary Renewable Electricity (CA)': 'VRE_acct', 
+                                'Retirement': 'retirement'})
+
+        # combine 'General' and 'Compliance' into 'gen_comp'
+        df['gen_comp'] = df[['gen_acct', 'comp_acct']].sum(axis=1)
+        df = df.drop(['gen_acct', 'comp_acct'], axis=1)
+
+        # create new version of CIR
+        CIR_historical_new = df.copy()
+        
+        CIR_historical_snap_CIR_q = CIR_historical_new.xs(snap_CIR_q_period, level='date')
+        
+        # COMPARE: MODEL MINUS HISTORICAL MINUS MODEL ************
+        diff = CIR_model_snap_CIR_q.sub(CIR_historical_snap_CIR_q)
+
+        # filter to keep only those cells that have a real diff (not fractional allowances)
+        diff = pd.DataFrame(diff.stack(), columns=['quant'])
+        mask = abs(diff['quant']) < 1e-7
+        diff = diff.loc[~mask]
+        diff = diff.unstack(-1)
+        diff.columns = diff.columns.droplevel(0)
+        diff = diff.fillna(0)
+
+        diff.index.name = 'vintage/type'
+        
+        # if any columns missing from those listed in prmt.CIR_columns, add them
+        for col in prmt.CIR_columns:
+            if col not in diff.columns:
+                diff[col] = float(0)
+            else:
+                pass
+            
+        # reorder columns
+        diff = diff[prmt.CIR_columns]
+        
+        # create sums of each column
+        diff.loc['totals'] = diff.sum()
+        
+        CIR_model_minus_hist = diff
+        
+        # ~~~~~~~~~~~~~
+        # CIR: assemble view
+        if CIR_units == 'MMTCO2e':
+            # no change made to above
+            view = CIR_model_minus_hist
+        
+        elif CIR_units == 'tons_CO2e':
+        # view comparison in terms of tons CO2e (rather than MMTCO2e)
+            tons_view = CIR_model_minus_hist * 1e6
+            for col in tons_view.columns:
+                tons_view[col] = tons_view[col].astype(int)
+            view = tons_view
+        # ~~~~~~~~~~~~~
+        
+        # print(view) # for db
+
+        print(f"{compare_date_str} ({CIR_units})")
+    
+    # cases below: no comparison possible
+    elif snap_CIR_q_period < oldest_CIR:
+        print(f"No historical CIR earlier than {oldest_CIR} to compare against.")
+        view = prmt.standard_MI_empty.copy()
+        
+    elif snap_CIR_q_period > newest_CIR:
+        print(f"No historical CIR after {newest_CIR} to compare against.")
+        view = prmt.standard_MI_empty.copy()
+    
+    else:
+        print("Error" + "! Should not have reached this point.")
+        view = prmt.standard_MI_empty.copy()
+
+    # returns df with entries only for quarters 
+    return(view)
+
+
+# In[ ]:
+
+
+# if __name__ == "__main__":
+
+#     if prmt.run_hindcast == True: 
+#         # # concat the snaps_CIR for each juris
+
+#         # # note: snaps have standard_MI index, and additional data column 'snap_q' (in addition to 'quant')
+#         # # snap_q gets moved into index in the groupby step below
+
+#         snaps_CIR_CA = scenario_CA.snaps_CIR
+#         snaps_CIR_QC = scenario_QC.snaps_CIR
+#         snaps_CIR_CA_QC = snaps_CIR_CA + snaps_CIR_QC # combine the two lists
+
+#         # snaps_CIR_CA and snaps_CIR_QC are lists of dfs
+#         # combine the two lists, then concat all dfs in the combined list
+#         df = pd.concat(snaps_CIR_CA_QC, sort=False)
+#         mapping_dict = {'juris': 'CA-QC'}
+#         df = multiindex_change(df, mapping_dict)
+#         df = df.groupby(['snap_q'] + prmt.standard_MI_names).sum()
+
+#         snaps_CIR_CAQC_grouped = df
+
+#         # CIR: settings for view
+#         compare_date_str = '2014Q4'
+#         CIR_units = 'MMTCO2e' # choices: 'MMTCO2e', 'tons_CO2e'
+
+#         view = compare_CIR_model_minus_hist(compare_date_str, prmt.CIR_historical, snaps_CIR_CAQC_grouped)
+#     else:
+#         # model currently does not have snaps_CIR for pre-run scenario
+#         # so in current state, only possible to compare model vs historical CIR when model is run in hindcast mode
+#         pass
 
 
 # # END OF MODEL
