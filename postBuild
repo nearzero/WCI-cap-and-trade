@@ -12,4 +12,4 @@ jupyter nbextension enable hide_header/main
 jupyter nbextension enable freeze/main
 
 # Notebooks w/ extensions that auto-run code must be "trusted" to work the first time
-jupyter trust WCI_model_interface.ipynb
+jupyter trust WCI-RULES_model_interface.ipynb
