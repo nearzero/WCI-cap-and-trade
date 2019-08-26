@@ -8940,10 +8940,6 @@ def turn_snap_into_CIR(yr_quart_period, snaps_CAQC):
     # select particular quarter to convert to CIR
     df = snaps_CAQC[snaps_CAQC.index.get_level_values('snap_q')==yr_quart_period]
     
-#     print("show all vintage 2200 before changing vintage to 'APCR':") # for db
-#     print(df.loc[df.index.get_level_values('vintage')==2200]) # for db
-#     print() # for db
-    
     # APCR: change vintage to 'APCR'
     mask = df.index.get_level_values('inst_cat').str.contains('APCR') # also selects e.g., 'alloc_2016_APCR'
     APCR = df.loc[mask]
@@ -9098,6 +9094,17 @@ def turn_snap_into_CIR(yr_quart_period, snaps_CAQC):
         CIR_snap.at[vintage, 'gen_comp'] = CIR_snap.at[vintage, 'gen_comp'] - retired
         CIR_snap.at[vintage, 'retirement'] = CIR_snap.at[vintage, 'retirement'] + retired
     
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    
+    # calculate totals
+    for col in CIR_snap.columns:
+#         print(f"for {col}, CIR_snap[col].sum(): {CIR_snap[col].sum()}") # for db
+        CIR_snap.at['totals', col] = CIR_snap[col].sum()
+        
+#     print(f"for {yr_quart_period}, show CIR_snap") # for db
+#     print(CIR_snap) # for db
+#     print() # for db
+        
     logging.info(f"{inspect.currentframe().f_code.co_name} (end)")
     
     return(CIR_snap)
@@ -9409,10 +9416,6 @@ def private_bank_annual_metric_paper_method():
     for quarter_year_period in Q4_historical_quarters:
 
         CIR_snap_q = turn_snap_into_CIR_for_private_bank_metric(quarter_year_period, snaps_CIR_CAQC_grouped)    
-        
-#         print("show CIR_snap_q:") # for db
-#         print(CIR_snap_q) # for db
-#         print() # for db
         
         if quarter_year_period.year == 2013:
             # fill in rows for offsets & early_action
@@ -10737,7 +10740,9 @@ def create_emissions_tabs():
     emissions_simp_ui = widgets.HBox([em_simp_col0, em_simp_col1])
     
     # put whole set of captions + sliders into VBox with header
-    em_simp_header = widgets.Label(value="Choose the annual percentage change for each jurisdiction, for the whole projection (2019-2030).")
+    year = prmt.emissions_last_hist_yr + 1
+    em_simp_text = f"Choose the annual percentage change for each jurisdiction, for the projection ({year}-2030)."
+    em_simp_header = widgets.Label(value=em_simp_text)
     emissions_simp_ui_w_header = widgets.VBox([em_simp_header, emissions_simp_ui])
     
     # ~~~~~~~~~~~~~~~~~~~
@@ -10861,7 +10866,7 @@ def create_auction_tabs():
 
     text1 = f"Choose particular years in which future auctions would have a portion of allowances go unsold (after the latest historical auction in {prmt.latest_hist_qauct_date}).<br>"
     text2 = "To select multiple years, hold down 'ctrl' (Windows) or 'command' (Mac), or to select a range of years, hold down Shift and click the start and end of the range.<br>"
-    text3 = "Then choose the percentage of allowances that go unsold in the auctions (both current and advance) in the years selected."
+    text3 = "Then use the slider to choose the percentage of allowances that go unsold in the auctions (both current and advance) in the years selected."
     auction_adv_ui_header_text = text1 + text2 + text3
     auction_adv_ui_header = widgets.HTML(value=auction_adv_ui_header_text)
     auction_adv_ui_w_header = widgets.VBox([auction_adv_ui_header, auction_adv_ui])
@@ -10942,7 +10947,7 @@ def create_offsets_tabs():
     off_adv_ui = widgets.HBox([off_adv_col0, off_adv_col1])
 
     off_adv_footer1 = widgets.Label(value="For California, the limits for each time period are 8% (2018-2020), 6% (2021-2025), and 4% (2026-2030). For Québec, the limit is 8% for all years.")
-    off_adv_footer2 = widgets.Label(value="Warning: The sliders above may allow you to set offsets supply higher than the quantity that could be used through 2030.")
+    off_adv_footer2 = widgets.Label(value="Warning: The sliders above may allow you to set offsets supply higher than the quantity that could be used through 2030. (See \"About carbon offsets\" below.)")
     
     off_adv_ui_w_header = widgets.VBox([off_adv_header, off_adv_ui, off_adv_footer1, off_adv_footer2])
 
@@ -11693,7 +11698,7 @@ em_custom_footnote_text = f"<p>Copy and paste from data table in Excel.</p><p>Fo
 
 # ~~~~~~~~~~~~~~~~~~
 
-auction_explainer_text = "<p>WCI quarterly auctions include two separate offerings: a current auction of allowances with vintage years equal to the current calendar year (as well as any earlier vintages of allowances that went unsold and are being reintroduced), and a separate advance auction featuring a limited number of allowances with a vintage year equal to three years in the future.</p><br><p>By default, the model assumes that all future auctions sell out. However, users can specify a custom percentage of allowances to go unsold at auction in one or more years. This percentage applies to both current and advance auctions, in each quarter of the user-specified years.</p><br><p>To date, most current auctions have sold out. But in 2016 and 2017, 143 million current allowances went unsold as sales collapsed over several auctions. Pursuant to market rules, most of these allowances were reintroduced for sale in current auctions, and all of those made available were sold.</p><br><p>Out of 118 million California state-owned allowances that went unsold in current auctions in 2016-2017, 80 million were reintroduced and sold. Because of limits on how many state-owned allowances can be reintroduced per auction, the other 38 million remained unsold for more than 24 months, at which point they were removed from the normal auction supply. There were a total of million allowances removed through this mechanism; of those, 1.2 million were retired in 2018 to account for Energy Imbalance Market (EIM) Outstanding Emissions, and the remainder were transferred (or scheduled to be transferred) to California’s market reserve account.</p><br><p>Québec's current regulations do not contain a similar stipulation for removal of unsold allowances from the normal auction supply.</p><br><p> For more information on this <q>self correction</q> mechanism, see <a href='http://www.nearzero.org/wp/2018/05/23/californias-self-correcting-cap-and-trade-auction-mechanism-does-not-eliminate-market-overallocation/' target='_blank'>Near Zero's May 2018 report</a href>.</p>"
+auction_explainer_text = f"<p>WCI quarterly auctions include two separate offerings: a current auction of allowances with vintage years equal to the current calendar year (as well as any earlier vintages of allowances that went unsold and are being reintroduced), and a separate advance auction featuring a limited number of allowances with a vintage year equal to three years in the future.</p><br><p>By default, the model assumes that all future auctions sell out. However, users can specify a custom percentage of allowances to go unsold at auction in one or more years. This percentage applies to both current and advance auctions, in each quarter of the user-specified years.</p><br><p>To date, most current auctions have sold out. But in 2016 and 2017, 143 million current allowances went unsold as sales collapsed over several auctions. Pursuant to market rules, most of these allowances were reintroduced for sale in current auctions, and all of those made available were sold.</p><br><p>Out of 118 million California state-owned allowances that went unsold in current auctions in 2016-2017, 80 million were reintroduced and sold. Because of limits on how many state-owned allowances can be reintroduced per auction, the other 38 million remained unsold for more than 24 months, at which point they were removed from the normal auction supply. There were a total of {} million allowances removed through this mechanism; of those, 1.2 million were retired in 2018 to account for Energy Imbalance Market (EIM) Outstanding Emissions, and the remainder were transferred (or scheduled to be transferred) to California’s market reserve account.</p><br><p>Québec's current regulations do not contain a similar stipulation for removal of unsold allowances from the normal auction supply.</p><br><p> For more information on this <q>self correction</q> mechanism, see <a href='http://www.nearzero.org/wp/2018/05/23/californias-self-correcting-cap-and-trade-auction-mechanism-does-not-eliminate-market-overallocation/' target='_blank'>Near Zero's May 2018 report</a href>.</p>"
 
 # ~~~~~~~~~~~~~~~~~~
 
@@ -11744,7 +11749,7 @@ em_explainer_accord.selected_index = None
 
 emissions_tabs_explainer = widgets.VBox([emissions_tabs, em_explainer_accord])
 
-emissions_title = widgets.HTML(value="<h4>demand projection: covered emissions</h4>")
+emissions_title = widgets.HTML(value="<h4>Demand projection: covered emissions</h4>")
 
 emissions_tabs_explainer_title = widgets.VBox([emissions_title, emissions_tabs_explainer])
 
@@ -11761,7 +11766,7 @@ auct_explain_accord.selected_index = None
 
 auction_tabs_explainer = widgets.VBox([auction_tabs, auct_explain_accord])
 
-auction_title = widgets.HTML(value="<h4>supply projection: allowances auctioned</h4>")
+auction_title = widgets.HTML(value="<h4>Supply projection: allowances auctioned</h4>")
 
 auction_tabs_explainer_title = widgets.VBox([auction_title, auction_tabs_explainer])
 
@@ -11777,7 +11782,7 @@ offsets_explainer_accord.selected_index = None
 
 offsets_tabs_explainer = widgets.VBox([offsets_tabs, offsets_explainer_accord])
 
-offsets_title = widgets.HTML(value="<h4>supply projection: offsets sales</h4>")
+offsets_title = widgets.HTML(value="<h4>Supply projection: offsets sales</h4>")
 
 offsets_tabs_explainer_title = widgets.VBox([offsets_title, offsets_tabs_explainer])
 
