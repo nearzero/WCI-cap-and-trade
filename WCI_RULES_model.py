@@ -9410,10 +9410,6 @@ def private_bank_annual_metric_paper_method():
 
         CIR_snap_q = turn_snap_into_CIR_for_private_bank_metric(quarter_year_period, snaps_CIR_CAQC_grouped)    
         
-        print("show CIR_snap_q:") # for db
-        print(CIR_snap_q) # for db
-        print() # for db
-        
         if quarter_year_period.year == 2013:
             # fill in rows for offsets & early_action
             for column in CIR_snap_q.columns:
