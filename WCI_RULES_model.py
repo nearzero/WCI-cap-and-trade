@@ -7260,7 +7260,7 @@ def process_allowance_supply_CA_QC():
     logging.info(f"{inspect.currentframe().f_code.co_name} (start)")
 
     if prmt.saved_auction_run_default == False:        
-        print("Processing each quarter:", end=' ') # for UI
+        print("Processing quarterly data:", end=' ') # for UI
         
         # get input: historical + projected quarterly auction data
         # sets object attribute prmt.auction_sales_pcts_all
@@ -7300,7 +7300,7 @@ def process_allowance_supply_CA_QC():
         # auction_tabs.selected_index is not 0, 
         # or there's a problem with prmt.saved_auction_run_default (neither True nor False)
         # either way, need to run auctions
-        print("Running auctions:", end=' ') # for UI
+        print("Processing quarterly data:", end=' ') # for UI
         
         # get input: historical + projected quarterly auction data
         # sets object attribute prmt.auction_sales_pcts_all
@@ -9409,6 +9409,10 @@ def private_bank_annual_metric_paper_method():
     for quarter_year_period in Q4_historical_quarters:
 
         CIR_snap_q = turn_snap_into_CIR_for_private_bank_metric(quarter_year_period, snaps_CIR_CAQC_grouped)    
+        
+#         print("show CIR_snap_q:") # for db
+#         print(CIR_snap_q) # for db
+#         print() # for db
         
         if quarter_year_period.year == 2013:
             # fill in rows for offsets & early_action
@@ -11840,3 +11844,4 @@ logging.info(f"WCI-RULES model log; end of run {save_timestamp}")
 
 
 # ## end of model run & interface code
+
