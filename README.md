@@ -1,18 +1,18 @@
-# Western Climate Initiative cap-and-trade model
+# WCI-RULES, an open-source model of the Western Climate Initiative cap-and-trade program
 ## Developed by Near Zero
-### Version 1.0
+### Version 1.1
 
 load the model on Binder: [![Binder](https://mybinder.org/badge.svg)](https://mybinder.org/v2/gh/nearzero/WCI-cap-and-trade/master?filepath=WCI_model_interface.ipynb)
 
 ---
 
-© Copyright 2018 by Near Zero. This work is licensed under a Creative Commons Attribution-ShareAlike 4.0 International License.
+© Copyright 2019 by Near Zero. This work is licensed under a [Creative Commons Attribution-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-sa/4.0/).
 
 Mason Inman (minman@nearzero.org) is the project manager and technical lead for the development of this model.
 
 The model is open source, released under the Creative Commons license above, and is written in Python, including use of the library Pandas. The online user interface is built using Jupyter, with figures using Bokeh, and hosted online through Binder.
 
-This model simulates the supply-demand balance of the Western Climate Initiative cap-and-trade program, jointly operated by California and Quebec.
+This model simulates the supply-demand balance of the Western Climate Initiative (WCI) cap-and-trade program, jointly operated by California and Quebec.
 
 ---
 
