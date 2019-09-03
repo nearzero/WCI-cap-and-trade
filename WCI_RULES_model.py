@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# <img src="https://storage.googleapis.com/wci_model_online_file_hosting/Near_Zero_logo_tiny.jpg" alt="[Near Zero logo]" align="right" style="width: 200px"/>
-# 
-# 
-# # <span style="color:DarkBlue">Western Climate Initiative cap-and-trade model</span>
+# # <span style="color:DarkBlue">WCI-RULES: An open-source model of the Western Climate Initiative cap-and-trade program</span>
+# <img src="https://storage.googleapis.com/wci_model_online_file_hosting/Near_Zero_logo_tiny.jpg" alt="[Near Zero logo]" align="right" style="width: 200px; padding:20px"/>
 # 
 # ## Developed by [Near Zero](http://nearzero.org)
 # 
@@ -103,32 +101,6 @@ from bokeh.resources import INLINE
 
 output_notebook(resources=INLINE, hide_banner=True)
 # hide_banner gets rid of message "BokehJS ... successfully loaded"
-
-
-# In[ ]:
-
-
-# start logging
-# to save logs, need to update below with the correct strings and selection for the desired directory
-# need to make sure the folder already exists, or else logs won't be saved
-
-try:
-    if os.getcwd().split('/')[1] == 'Users':
-        # then model is running on developer's local computer
-        # create logging timestamp
-        save_timestamp = time.strftime('%Y-%m-%d_%H%M', time.localtime())
-
-        LOG_PATH = os.getcwd().rsplit('/', 1)[0] + '/WCI model logs'
-
-        logging.basicConfig(filename=f"{LOG_PATH}/WCI-RULES_log_{save_timestamp}.txt", 
-                            filemode='a',  # choices: 'w' or 'a'
-                            level=logging.INFO)
-    else:
-        # don't save log       
-        pass
-except:
-    # don't save log
-    pass
 
 
 # ## KEY TO MODEL METADATA
@@ -256,7 +228,7 @@ class Prmt():
         self.verbose_log = True
         self.test_failed_msg = 'Test failed!: '   
         
-        self.model_results = '/Users/masoninman/Dropbox/cap_and_trade_active_dev_model_test_results/'
+        self.model_results = '/Users/masoninman/Dropbox/cap_and_trade_active_dev_model_results/'
 
         self.neg_cut_off = 10/1e6 # units MMTCO2e; enter number of allowances (tons CO2e) in numerator
         # doesn't matter whether negative or positive entered here; used with -abs(neg_cut_off)
@@ -410,6 +382,8 @@ class Prmt():
         self.error_msg_post_refresh = []
         
         self.data_input_file_version = '' # value set by fn load_input_files
+        
+        self.save_timestamp = ''
 
 # ~~~~~~~~~~~~~~~~~~
 # create object prmt (instance of class Prmt), after which it can be filled with more entries below
@@ -437,6 +411,34 @@ class Cq():
         
 # create new object qc
 cq = Cq(pd.to_datetime('2012Q4').to_period('Q'))
+
+
+# # LOGGING
+
+# In[ ]:
+
+
+# start logging
+# to save logs, need to update below with the correct strings and selection for the desired directory
+# need to make sure the folder already exists, or else logs won't be saved
+
+try:
+    if os.getcwd().split('/')[1] == 'Users':
+        # then model is running on developer's local computer
+        # create logging timestamp
+        prmt.save_timestamp = time.strftime('%Y-%m-%d_%H%M', time.localtime())
+        
+        LOG_PATH = os.getcwd().rsplit('/', 1)[0] + '/WCI model logs'
+
+        logging.basicConfig(filename=f"{LOG_PATH}/WCI-RULES_log_{prmt.save_timestamp}.txt", 
+                            filemode='a',  # choices: 'w' or 'a'
+                            level=logging.INFO)
+    else:
+        # don't save log       
+        pass
+except:
+    # don't save log
+    pass
 
 
 # # START OF FUNCTIONS
@@ -743,10 +745,9 @@ def load_input_files():
     logging.info(f"{inspect.currentframe().f_code.co_name} (start)")
     
     progress_bar_loading.wid.value += 1 # for progress_bar_loading
-#     print("Importing data... " , end='') # for UI
     
     input_file_name = 'WCI-RULES_data_input_file.xlsx'
-    
+
     # download input file once from Google Cloud Platform, set as an attribute of object prmt    
     if prmt.run_online_GCP == True:
         input_file_URL = f'https://storage.googleapis.com/wci_model_online_file_hosting/{input_file_name}'
@@ -785,9 +786,8 @@ def load_input_files():
 
     # ~~~~~~~~~~~~~
     # CIR quarterly
-      
     CIR_file_name = 'Compliance_Instrument_Report.xlsx'
-       
+    
     # download CIR file once from Google Cloud Platform, set as an attribute of object prmt  
     if prmt.run_online_GCP == True:
         CIR_file_URL = f'https://storage.googleapis.com/wci_model_online_file_hosting/{CIR_file_name}'
@@ -1039,8 +1039,7 @@ def create_qauct_new_avail_consign():
     # calculate unsold
     df['Unsold'] = df['Available'] - df['Sold']
     
-    # exclude rows in which vintage != date_level.year; 
-    # this is to exclude an anomaly: 9,301 allowances of vintage 2014 available (and sold) in 2017Q1 auction
+    # exclude an anomaly: 9,301 allowances of vintage 2014 available (and sold) in 2017Q1 auction
     mask1 = df['vintage'] == 2014
     mask2 = df['date_level'] == quarter_period('2017Q1')
     mask = (mask1) & (mask2)
@@ -3540,14 +3539,8 @@ def process_CA_quarterly(all_accts):
     all_accts = process_auction_cur_CA_all_accts(all_accts)
     
     # FINISHING AFTER AUCTION: ***************************************************************
-    if cq.date == quarter_period('2019Q2'):       
-        # the only historical bankruptcy retirement occurred in 2019Q2, for La Paloma
-        # occurred on June 27, 2019, according to note at bottom of 2019Q2 CIR
-        all_accts = retire_for_bankruptcy(all_accts)
-    else:
-        # don't do anything; bankruptcy retirements for dates > 2019Q2 processed at start of Q4
-        pass
     
+    # handling unsold allowances that hit 24-month limit
     if cq.date <= quarter_period('2018Q4'):
         if cq.date == quarter_period('2018Q3'):
             # process EIM Outstanding at end of Q3
@@ -3577,6 +3570,17 @@ def process_CA_quarterly(all_accts):
     else:
         # don't do anything; EIM retirements for dates > 2019Q2 are processed at start of Q4
         pass
+    
+    # ~~~~~~~~~
+    # bankruptcy retirement (from future vintage allowances in government holding accounts)
+    if cq.date == quarter_period('2019Q2'):       
+        # the only historical bankruptcy retirement occurred in 2019Q2, for La Paloma
+        # occurred on June 27, 2019, according to note at bottom of 2019Q2 CIR
+        all_accts = retire_for_bankruptcy(all_accts)
+    else:
+        # don't do anything; bankruptcy retirements for dates > 2019Q2 processed at start of Q4
+        pass
+    # ~~~~~~~~~
     
     if cq.date.quarter == 4:        
         # Q4 PROCESSING AFTER AUCTION **********************************************
@@ -4086,17 +4090,22 @@ def redesignate_unsold_current_auct(all_accts, juris):
     """
     Redesignates state-owned allowances that are eligible, changing 'status' to 'available'.
     
-    (Consignment are redesignated by fn consign_make_available_incl_redes.)
-    
     Note that this function only redesignates unsold from current auctions to later current auctions. 
     
-    This function doesn't redesignate unsold advance to later advance auctions.
+    (Consignment are redesignated by function consign_make_available_incl_redes.)
+    
+    (Unsold advance to later advance auctions are redesignated by function redesignate_unsold_advance_as_advance.)
     """
     
     logging.info(f"{inspect.currentframe().f_code.co_name} (start)")
     
+    # pre-test for conservation of allowances
+    all_accts_sum_init = all_accts['quant'].sum()
+    
     previous_q = (pd.to_datetime(f'{cq.date.year}Q{cq.date.quarter}') - DateOffset(months=3)).to_period('Q')
     
+    # ~~~~~~~~~~~~~~~~~~
+    # check whether this quarter is eligible for reintroductions (for this juris)
     # get sell_out_counter, which is the number of consecutive current auctions that sold out, before cq.date
     if juris == 'CA':   
         cur_sell_out_counter = prmt.CA_cur_sell_out_counter.loc[cq.date]
@@ -4114,19 +4123,12 @@ def redesignate_unsold_current_auct(all_accts, juris):
     logging.info(f"in {cq.date} juris {juris}, cur_sell_out_counter: {cur_sell_out_counter}")
     logging.info(f"in {cq.date} juris {juris}, reintro_eligibility: {reintro_eligibility}")
     
-    # pre-test for conservation of allowances
-    all_accts_sum_init = all_accts['quant'].sum()
-    
-    # only do things in this function if reintro_eligibility == True
+    # ~~~~~~~~~~~~~~~~~~
+    # run remainder of function only if reintro_eligibility == True
     if reintro_eligibility == True:
-
         # ***** redesignation of advance as advance is done by fn redesignate_unsold_advance_as_advance *****
-        
-        # ***** redesignation of consignment is done by fn consign_make_available_incl_redes *****
-
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~
         # redesignate unsold current state-owned (aka reintro)
-
         if prmt.run_tests == True:
             # TEST: in all_accts, are available allowances only in auct_hold? & have only 'date_level'==cq.date? 
             # (if so, then selection below for auct_type current & status available will work properly)
@@ -4135,22 +4137,22 @@ def redesignate_unsold_current_auct(all_accts, juris):
             if available_sel.empty == False:
                 # TEST: are avail only in auct_hold?
                 if available_sel.index.get_level_values('acct_name').unique().tolist() != ['auct_hold']:
-                    print(f"{prmt.test_failed_msg} Available allowances in account other than auct_hold. Here's available:")
-                    print(available_sel)
+                    print(f"{prmt.test_failed_msg} Available allowances in account other than auct_hold. Here's available:") # for UI
+                    print(available_sel) # for UI
                 else:
                     pass
         
                 # TEST: do avail have only date_level == cq.date?
                 if available_sel.index.get_level_values('date_level').unique().tolist() != [cq.date]:
-                    print(f"{prmt.test_failed_msg} Available allowances have date_level other than cq.date (%s). Here's available:" % cq.date)
-                    print(available_sel)
+                    print(f"{prmt.test_failed_msg} Available allowances have date_level other than cq.date (%s). Here's available:" % cq.date) # for UI
+                    print(available_sel) # for UI
                 else:
                     pass
             
             else: # available_sel.empty == True
-                print("Warning" + f"! In {cq.date}, {inspect.currentframe().f_code.co_name}, available_sel is empty.")
-                print("Because available_sel is empty, show auct_hold:")
-                print(all_accts.loc[all_accts.index.get_level_values('acct_name')=='auct_hold'])
+                print("Warning" + f"! In {cq.date}, {inspect.currentframe().f_code.co_name}, available_sel is empty.") # for UI
+                print("Because available_sel is empty, show auct_hold:") # for UI
+                print(all_accts.loc[all_accts.index.get_level_values('acct_name')=='auct_hold']) # for UI
             # END OF TEST
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -4222,13 +4224,11 @@ def calculate_max_cur_reintro(all_accts, juris):
 
 def reintro_update_unsold_1j(all_accts, juris, max_cur_reintro_1j_1q):
     """
-    Takes unsold allowances, reintro some based on rules.
-    
-    This function is called only when reintro_eligibility == True.
-    
-    Rules on redesignation of unsold state-owned allowances (aka reintroduction):
+    Takes unsold state-owned allowances, reintroduces some to auction based on rules:
     CA regs: § 95911(f)(3)(A) & (C) [in force Apr 2019]
     QC regs: Section 54 (paragraph 1) [in force date 2014-10-22] 
+    
+    This function is called only when reintro_eligibility == True.
     
     """
     logging.info(f"{inspect.currentframe().f_code.co_name} (start)")
@@ -4241,7 +4241,6 @@ def reintro_update_unsold_1j(all_accts, juris, max_cur_reintro_1j_1q):
     mask3 = all_accts.index.get_level_values('auct_type')=='current'
     mask4 = all_accts.index.get_level_values('inst_cat')==juris
     mask5 = all_accts['quant']>0
-    
     mask = (mask1) & (mask2) & (mask3) & (mask4) & (mask5)
     
     # CA: add additional mask for 24-month limit
@@ -4250,24 +4249,8 @@ def reintro_update_unsold_1j(all_accts, juris, max_cur_reintro_1j_1q):
         # only those with unsold_di equal to or after the cut_off_date can be reintroduced
         mask_cut_off = all_accts.index.get_level_values('unsold_di') >= cut_off_date
         mask = mask & (mask_cut_off)
-    
-    # QC anomalies: add additional masks:
-    elif juris == 'QC':
-        if cq.date == quarter_period('2015Q2'):
-            # only reintro vintage 2013
-            mask_2015Q2 = all_accts.index.get_level_values('vintage')==2013
-            mask = mask & (mask_2015Q2)
-
-        elif cq.date == quarter_period('2015Q3') or cq.date == quarter_period('2015Q4'):
-            # block reintro; set mask equal to value that never occurs, so resulting df will be empty
-            # this overrides any value of mask set above
-            mask = all_accts.index.get_level_values('units') == 'empty'
-        
-        else:
-            pass
-        
     else:
-        print("Error" + f"! Juris is not CA nor QC; it is: {juris}")
+        pass
     
     reintro_eligible_1j = all_accts.loc[mask]
     
@@ -4308,7 +4291,7 @@ def reintro_update_unsold_1j(all_accts, juris, max_cur_reintro_1j_1q):
                 reintro_one_batch.name = 'reintro_one_batch'
                 reintro_one_batch['quant'] = float(0)
                 
-                # set new value for 'quant'; delete rows with zero quantity
+                # set new value for 'quant'
                 reintro_one_batch.at[row, 'quant'] = reintro_one_batch_quantity
     
                 # put reintro for this row into df for collecting all reintro for this juris
@@ -4338,7 +4321,7 @@ def reintro_update_unsold_1j(all_accts, juris, max_cur_reintro_1j_1q):
         # (alternative: create df of reintro to remove, then just concat all_accts_pos, to add, to remove)
         all_accts = pd.concat([reintro_1j_1q, reintro_eligible_1j, remainder], sort=True)
         all_accts = all_accts.groupby(level=prmt.standard_MI_names).sum()
-            
+        
     else: # if reintro_eligible_1j['quant'].sum() is not > 0
         pass
     
@@ -4410,7 +4393,8 @@ def process_auction_cur_CA_all_accts(all_accts):
     if sales_fract_cur_1j_1q == 1.0:
         # all available allowances are sold and transferred into gen_acct
         cur_sold_CA_1q = cur_avail_CA_1q
-        mapping_dict = {'status': 'sold', 'acct_name': 'gen_acct'}
+        mapping_dict = {'status': 'sold', 
+                        'acct_name': 'gen_acct'}
         cur_sold_CA_1q = multiindex_change(cur_sold_CA_1q, mapping_dict)
         
         # recombine
@@ -4498,13 +4482,13 @@ def process_auction_cur_CA_all_accts(all_accts):
             all_accts_after_consign_sales = all_accts['quant'].sum()
             diff = all_accts_after_consign_sales - all_accts_sum_init
             if abs(diff) > 1e-7:
-                print(f"{prmt.test_failed_msg} Allowances not conserved in fn process_auction_cur_CA_all_accts, after consignment sales.")
-                print("diff = all_accts_after_consign_sales - all_accts_sum_init:")
-                print(diff)
-                print("all_accts_sum_init: %s" % all_accts_sum_init)
-                print("consign_sold_1q sum: %s" % consign_sold_1q['quant'].sum())
-                print("consign_unsold_1q sum: %s" % consign_unsold_1q['quant'].sum())
-                print("not_consign_avail_1q sum: %s" % not_consign_avail_1q['quant'].sum())
+                print(f"{prmt.test_failed_msg} Allowances not conserved in fn process_auction_cur_CA_all_accts, after consignment sales.") # for UI
+                print("diff = all_accts_after_consign_sales - all_accts_sum_init:") # for UI
+                print(diff) # for UI
+                print("all_accts_sum_init: %s" % all_accts_sum_init) # for UI
+                print("consign_sold_1q sum: %s" % consign_sold_1q['quant'].sum()) # for UI
+                print("consign_unsold_1q sum: %s" % consign_unsold_1q['quant'].sum()) # for UI
+                print("not_consign_avail_1q sum: %s" % not_consign_avail_1q['quant'].sum()) # for UI
             # END OF TEST
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -4683,8 +4667,7 @@ def process_reserve_sales_historical(all_accts, juris):
     
     So this function takes the subtotals for each jurisdiction and transfers allowances.
     
-    The function draws from the allowances in the main set of reserves first (non-vintaged),
-    then draws down vintaged allowances.
+    The function draws first from the allowances in the main set of reserves (non-vintaged), then vintaged allowances.
     """
     logging.info(f"{inspect.currentframe().f_code.co_name} (start)")
     
@@ -4692,8 +4675,6 @@ def process_reserve_sales_historical(all_accts, juris):
         reserve_sales_1q = prmt.CA_reserve_sales_q_hist.at[cq.date]
     elif juris == 'QC':
         reserve_sales_1q = prmt.QC_reserve_sales_q_hist.at[cq.date]
-        
-#     print(f"for {juris}, for {cq.date}, reserve_sales_1q: {reserve_sales_1q}") # for db
     
     # pre-test for conservation of allowances
     all_accts_sum_init = all_accts['quant'].sum()
@@ -4732,7 +4713,8 @@ def process_reserve_sales_historical(all_accts, juris):
                 reserve_sales_1q_remain += -1 * potential.at[row, 'quant']
 
         # change metadata in reserve_sales
-        mapping_dict = {'acct_name': 'gen_acct', # transfers allowances to gen_acct (private)
+        mapping_dict = {'status': 'sold',
+                        'acct_name': 'gen_acct', # transfers allowances to gen_acct (private)
                         'date_level': cq.date, # sets date_level to be the date the reserve sale occurred
                        }
         reserve_sales = multiindex_change(reserve_sales, mapping_dict)
@@ -5094,14 +5076,8 @@ def cur_upsample_avail_state_owned_first_principles(all_accts, juris):
     if juris == 'QC' and cq.date==quarter_period('2013Q4'):
         # special case: transfer annual total allowances; no upsampling
         avail_2013Q4 = annual_avail_1v
-        
         mapping_dict = {'date_level': quarter_period('2013Q4')}
-        avail_2013Q4 = multiindex_change(avail_2013Q4, mapping_dict)
-        
-#         print("in cur_upsample_avail_state_owned_first_principles, show avail_2013Q4") # for db
-#         print(avail_2013Q4) # for db
-#         print() # for db
-        
+        avail_2013Q4 = multiindex_change(avail_2013Q4, mapping_dict)        
         list_of_avail_1qs += [avail_2013Q4]
         
     else:
@@ -5345,40 +5321,6 @@ def initialize_QC_auctions_2013Q4(all_accts):
     
     all_accts = transfer_cur__from_alloc_hold_to_auct_hold_first_principles(all_accts, 'QC')
     all_accts = cur_upsample_avail_state_owned_first_principles(all_accts, 'QC')
-
-    # TO DO: delete block of code below
-#     mask1 = all_accts.index.get_level_values('acct_name')=='alloc_hold'
-#     mask2 = all_accts.index.get_level_values('inst_cat')=='cap'
-#     mask3 = all_accts.index.get_level_values('vintage')=='2013'
-#     mask4 = all_accts.index.get_level_values('juris')=='QC'
-#     mask5 = all_accts['quant'] > 0
-#     mask = (mask1) & (mask2) & (mask3) & (mask4) & (mask5)
-#     to_transfer = all_accts.loc[mask]
-#     remainder = all_accts.loc[~mask]
-    
-#     # update metadata for state_alloc_hold, to put into auct_hold & turn into state-owned allowances
-#     mapping_dict = {'acct_name': 'auct_hold',
-#                     'inst_cat': 'QC',
-#                     'auct_type': 'current',
-#                     'status': 'available',
-#                     'newness': 'new', 
-#                     'date_level': quarter_period('2013Q4')}
-
-#     print("in initialize_QC_auctions_2013Q4, show to_transfer (after metadata update)") # for db
-#     print(to_transfer) # for db
-#     print() # for db
-    
-#     to_transfer = multiindex_change(to_transfer, mapping_dict)
-    
-#     all_accts = pd.concat([to_transfer, remainder], sort=False) 
-    
-#     dups = all_accts.loc[all_accts.index.duplicated(keep=False)]
-    
-#     if dups.empty==False:
-#         # there are duplicated indices; need to do groupby sum
-#         all_accts_pos = all_accts.loc[all_accts['quant']>1e-7].groupby(level=prmt.standard_MI_names).sum()
-#         all_accts_neg = all_accts.loc[all_accts['quant']<-1e-7].groupby(level=prmt.standard_MI_names).sum()
-#         all_accts = all_accts_pos.append(all_accts_neg)
     
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # ADVANCE AUCTION (2013Q4 anomaly):
@@ -5730,24 +5672,7 @@ def QC_state_owned_make_available(all_accts, auct_type):
     # pre-test: conservation of allowances
     all_accts_sum_init = all_accts['quant'].sum()
     
-#     print(f"running QC_state_owned_make_available for {cq.date}") # for db
-    
-    if auct_type in ['advance', 'current']:
-        
-#         # FOR DB:
-#         if cq.date == quarter_period('2013Q4'):
-#             print(f"cq.date is {cq.date}")
-#             print(f"auct_type: {auct_type}")
-#             print("show all in auct hold, of auct_type above")
-#             print(all_accts.loc[(all_accts.index.get_level_values('acct_name')=='auct_hold') & 
-#                                 (all_accts.index.get_level_values('auct_type')==auct_type)])
-#             print()
-#             print("show all in auct hold, of auct_type above, of date_level==cq.date")
-#             print(all_accts.loc[(all_accts.index.get_level_values('acct_name')=='auct_hold') & 
-#                                 (all_accts.index.get_level_values('auct_type')==auct_type) & 
-#                                 (all_accts.index.get_level_values('date_level')==cq.date)])            
-#         # END DB
-        
+    if auct_type in ['advance', 'current']:        
         # get allowances in auct_hold, for specified auct_type, for date_level == cq.date
         mask1 = all_accts.index.get_level_values('acct_name')=='auct_hold'
         mask2 = all_accts.index.get_level_values('auct_type')==auct_type
@@ -5760,10 +5685,6 @@ def QC_state_owned_make_available(all_accts, auct_type):
         # update status to 'available'
         mapping_dict = {'status': 'available'}
         avail_1q = multiindex_change(avail_1q, mapping_dict)
-        
-#         print(f"for {cq.date}, auct_type {auct_type}, show avail_1q") # for db
-#         print(avail_1q) # for db
-#         print() # for db
 
         # combine avail with remainder (~mask)
         all_accts = avail_1q.append(all_accts.loc[~mask])
@@ -5829,16 +5750,8 @@ def transfer_QC_alloc_trueups__from_alloc_hold(all_accts):
         # from QC_alloc_trueup_1q, get all the emission years that there are true-ups for
         emission_years = QC_alloc_trueup_1q.index.get_level_values('emission_year').tolist()
         
-        # iterate through all emission years that had trueups in cq.date
-#         print() # for db
-#         print("============") # for db
-#         print("============") # for db
-#         print(f"for {cq.date}, emission_years: {emission_years}") # for db
-        
-        for emission_year in emission_years:  
-#             print("-----") # for db
-#             print(f"processing emission_year {emission_year}") # for db
-            
+        # iterate through all emission years that had trueups in cq.date        
+        for emission_year in emission_years:            
             # get quantity of true-ups for specified emissions year (returns a Series)
             QC_alloc_trueup_1q_1y = QC_alloc_trueup_1q.xs(emission_year, 
                                                           level='emission_year', 
@@ -6163,11 +6076,7 @@ def transfer_QC_alloc_trueups_neg__to_reserve(all_accts):
                             'auct_type': 'reserve'}
             df = multiindex_change(df, mapping_dict)
             trueup_neg_to_reserve = df.copy()
-            
-            print(f"in {cq.date}, show df trueup_neg_to_reserve:") # for db
-            print(trueup_neg_to_reserve) # for db
-            print() # for db
-            
+
             all_accts = pd.concat([all_accts, trueup_neg_to_subtract, trueup_neg_to_reserve], sort=True)
             # no need to do groupby sums; metadata distinct for each set of allowances   
     
@@ -6252,6 +6161,7 @@ def avail_accum_append(all_accts, avail_accum, auct_type_specified):
     avail_1q = all_accts.loc[(all_accts.index.get_level_values('status')=='available') & 
                              (all_accts.index.get_level_values('auct_type')==auct_type_specified)]
 
+    # TEST
     if prmt.run_tests == True:
         if len(avail_1q) > 0:
             # check that all available allowances have date_level == cq.date
@@ -6271,6 +6181,7 @@ def avail_accum_append(all_accts, avail_accum, auct_type_specified):
             print()
     else:
         pass
+    # END OF TEST
             
     avail_accum = avail_accum.append(avail_1q)
     
@@ -7583,11 +7494,11 @@ def process_CA(all_accts_CA):
         if progress_bar_CA.wid.value <= len(prmt.CA_quarters):
             progress_bar_CA.wid.value += 1
                     
-        # at end of each quarter, step cq.date to next quarter
-        cq.step_to_next_quarter()
-
         logging.info(f"******** end of {cq.date} ********")
         logging.info("------------------------------------")
+                
+        # at end of each quarter, step cq.date to next quarter
+        cq.step_to_next_quarter()
         
     # end of loop "for quarter_year in prmt.CA_quarters:"
     
@@ -7776,13 +7687,14 @@ def supply_demand_calculations():
     # OFFSET SUPPLY
     offsets_projection() # sets prmt.offsets_supply_q & prmt.offsets_supply_ann
     
-    prmt.supply_ann_df = pd.concat([
+    supply_ann_df = pd.concat([
         prmt.allow_vint_ann,
-        prmt.allow_nonvint_ann,
+        prmt.allow_nonvint_ann, # does not include projected reserve & PCU sales
         prmt.offsets_supply_ann], 
         axis=1)
     
-    supply_ann = prmt.supply_ann_df.sum(axis=1)
+    # sum (which converts DataFrame to Series)
+    supply_ann = supply_ann_df.sum(axis=1)
     supply_ann.name = 'supply_ann'
     prmt.supply_ann = supply_ann
     
@@ -7790,18 +7702,18 @@ def supply_demand_calculations():
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # PRIVATE BANK METRIC:
     # calculation of method developed for model   
-    private_bank_annual_metric_model_method()
+    private_bank_annual_metric_model_method(supply_ann_df)
     # sets prmt.bank_cumul & prmt.reserve_PCU_sales_cumul
 
     # PRIVATE BANK METRIC modification:
     # for years with full historical data on the supply side,
     # use method from banking paper (Cullenward et al., 2019)
-    private_bank_paper_method = private_bank_annual_metric_paper_method()
+    private_bank_paper = private_bank_annual_metric_paper_method()
     
     # for private bank metric, use values calculated here for years up to prmt.supply_last_hist_yr   
-    for year in private_bank_paper_method.index:
+    for year in private_bank_paper.index:
         # overwrite values in bank_cumul_pos with values from method used in banking paper (Cullenward et al., 2019)
-        prmt.bank_cumul.at[year] = private_bank_paper_method.at[year]
+        prmt.bank_cumul.at[year] = private_bank_paper.at[year]
       
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # RESERVE ACCOUNT METRIC:
@@ -8232,7 +8144,6 @@ def create_allow_nonvint_ann(snaps_CAQC_toward_bank):
     allow_nonvint_cumul = df['quant']
     allow_nonvint_cumul.name = 'allow_nonvint_cumul'
 
-    # get historical data
     # insert value for initial quarter (since diff turns that into NaN)
     allow_nonvint_ann = allow_nonvint_cumul.diff()
     first_year = allow_nonvint_ann.index.min()
@@ -8812,18 +8723,34 @@ def excess_offsets_calc():
 # In[ ]:
 
 
-def private_bank_annual_metric_model_method():
+def private_bank_annual_metric_model_method(supply_ann_df):
     """
     Method of calculating Private Bank metric originally developed for the model.
     
     For years with full historical data on the supply side, values are overwritten using method from 
     Near Zero's banking paper (Cullenward et al., 2019).  
     
-    The method in this function is still used for calculating the Private Bank in all projection years.
+    For all projection years, the method in this function is used for calculating the Private Bank.
     """
+    
     logging.info(f"{inspect.currentframe().f_code.co_name} (start)")
     
-    # RESERVE SALES (& MODIFY BANKING METRIC TO ONLY HAVE POSITIVE VALUES)
+    # modify supply_ann_df to include additional columns, including cumulative values
+    df = supply_ann_df.copy()
+
+    # calculate balance prior to any projected reserve & PCU sales
+    # note: at this point, 'allow_nonvint_ann' does not include *projected* reserve & PCU sales
+    df['obligations'] = prmt.CA_QC_obligations_fulfilled_hist_proj
+    df['balance_ann'] = supply_ann_df.sum(axis=1) - df['obligations']
+    df['balance_cumul'] = df['balance_ann'].cumsum()
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # HISTORICAL RESERVE SALES
+    
+    # Note: allow_nonvint_ann above already includes any historical reserve sales for calculating balance,
+    # together with other distributions of nonvint allowances (APCR for allocations & Early Action allowances).
+    # Use reserve_PCU_sales_cumul_hist to represent historical reserve sales, 
+    # which may occur before bank is exhausted.
     
     # start from historical record of cumulative reserve sales (prmt.reserve_PCU_sales_q_hist)
     # convert index to annual & calculate annual sums
@@ -8834,38 +8761,81 @@ def private_bank_annual_metric_model_method():
     reserve_PCU_sales_ann_hist = ser
     
     # drop year 2012; metrics not calculated for that year
+    # (we know value was zero, so dropping it doesn't affect any calculations)
     reserve_PCU_sales_ann_hist = reserve_PCU_sales_ann_hist.drop(2012)
+    reserve_PCU_sales_cumul_hist = reserve_PCU_sales_ann_hist.cumsum()
     
+    for year in reserve_PCU_sales_cumul_hist.index:
+        df.at[year, 'reserve_PCU_ann'] = reserve_PCU_sales_ann_hist.at[year]
+        df.at[year, 'reserve_PCU_cumul'] = reserve_PCU_sales_cumul_hist.at[year]
+
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # determine starting year for projection of reserve/PCU sales
+    if prmt.reserve_PCU_sales_q_hist.index[-1].quarter < 4:
+        # partial year of historical data on reserve/PCU sales
+        # start projection with that partial year
+        reserve_PCU_sales_proj_start_year = prmt.reserve_PCU_sales_q_hist.index[-1].year
 
-    df = prmt.supply_ann_df.copy()
-    
-    # put reserve & PCU sales into supply df;
-    # here only historical; later projection data is added
-    df['reserve_PCU_ann'] = reserve_PCU_sales_ann_hist
-    
-    df['obligations'] = prmt.CA_QC_obligations_fulfilled_hist_proj
-    df['balance_ann'] = df[['allow_vint_ann', 
-                            'allow_nonvint_ann', 
-                            'offsets_supply_ann']
-                          ].sum(axis=1).add(-1*prmt.CA_QC_obligations_fulfilled_hist_proj)
-    df['balance_cumul'] = df['balance_ann'].cumsum()
+    elif prmt.reserve_PCU_sales_q_hist.index[-1].quarter == 4:
+        # full year of historical data on reserve/PCU sales
+        # start projection with following year
+        reserve_PCU_sales_proj_start_year = prmt.reserve_PCU_sales_q_hist.index[-1].year + 1
 
-    cumul_shortfall_years = df.loc[df['balance_cumul']<0].index
-    balance_ann_in_shortfall_cumul = df.loc[cumul_shortfall_years]['balance_ann']
-    shortfall_cumul = df.loc[cumul_shortfall_years]['balance_cumul']
+    # create projection of reserve & PCU sales, starting from first full projection year
+    for year in range(reserve_PCU_sales_proj_start_year, 2030+1):
+        if df.at[year, 'balance_cumul'] >= 0:
+            # no more reserve/PCU sales required           
+            reserve_PCU_ann_sales = 0
+            
+            # if this is a partial year projection, no *additional* reserve/PCU sales are required
+            # any historical reserve/PCU sales would be included already in 'allow_nonvint_ann'
+            # and in 'reserve_PCU_ann' & 'reserve_PCU_cumul'            
 
-    # update annual columns
-    for col in ['allow_nonvint_ann', 'reserve_PCU_ann', 'balance_ann']:
-        df[col] = df[col].add(-1*balance_ann_in_shortfall_cumul, fill_value=0)
+        elif df.at[year, 'balance_cumul'] < 0:
+            # without reserve sales, there would be a supply shortfall in this year
+            # calculate reserve & PCU sales required to achieve balance of 0
+            
+            # note that this function iteratively updates 'balance_cumul' values, 
+            # so that if balance_cumul had gone negative in year prior, it would trigger reserve sales
+            # and values for balance_cumul in that year and all later years were revised to reflect reserve sales
+            reserve_PCU_ann_sales = -1 * df.at[year, 'balance_cumul']
+            
+        else:
+            print(f"Error! Unexpected value for balance_cumul in year: {df.at[year, 'balance_cumul']}") # for UI
+
+        # update or fill in values for reserve sales
+        if year==prmt.reserve_PCU_sales_q_hist.index[-1].year and prmt.reserve_PCU_sales_q_hist.index[-1].quarter<4:
+            # partial year; update existing value
+            df.at[year, 'reserve_PCU_ann'] = df.at[year, 'reserve_PCU_ann'] + reserve_PCU_ann_sales
+                  
+            # cumulative update is sum of:
+            # previous year value & historical data from input file & additional reserve/PCU sales
+            df.at[year, 'reserve_PCU_cumul'] = sum([df.at[year-1, 'reserve_PCU_cumul'],
+                                                    df.at[year, 'reserve_PCU_cumul'], 
+                                                    reserve_PCU_ann_sales])
+        else: 
+            # full projection years; set new value
+            df.at[year, 'reserve_PCU_ann'] = reserve_PCU_ann_sales
+            df.at[year, 'reserve_PCU_cumul'] = sum([df.at[year-1, 'reserve_PCU_cumul'],
+                                                    reserve_PCU_ann_sales])
         
-    # update cumul columns
-    for col in ['balance_cumul']:
-        df[col] = df[col].add(-1*shortfall_cumul, fill_value=0)
+        # update balance_ann to reflect reserve & PCU sales in year
+        df.at[year, 'balance_ann'] += reserve_PCU_ann_sales
+
+        # update balance_cumul to reflect reserve & PCU sales
+        # including for future years 
+        # (so that in next iteration, balance_cumul reflects prior year reserve & PCU sales)
+        for year2 in range(year, df.index.max()+1):
+            df.at[year2, 'balance_cumul'] += reserve_PCU_ann_sales
+
+        # update allow_nonvint_ann to reflect projected reserve & PCU sales
+        df.at[year, 'allow_nonvint_ann'] += reserve_PCU_ann_sales
+
+    # ~~~~~~~~~~~~~~~
     
     # set attributes
     prmt.bank_cumul = df['balance_cumul']
-    prmt.reserve_PCU_sales_cumul = df['reserve_PCU_ann'].fillna(0).cumsum()
+    prmt.reserve_PCU_sales_cumul = df['reserve_PCU_cumul']
     
     # no return
     logging.info(f"{inspect.currentframe().f_code.co_name} (end)")
@@ -8892,33 +8862,38 @@ def calculate_reserve_account_metric_and_related(snaps_end_Q4_CA_QC):
     # *projected* reserve sales are handled here, after end of processing main supply functions
     df = snaps_end_Q4_CA_QC.copy()
     df = df.loc[df.index.get_level_values('acct_name')=='APCR_acct']
-    df = df.groupby('snap_yr')[['quant']].sum()
+    reserve_accts_before_sales = df.groupby('snap_yr')['quant'].sum()
     
     # drop the value for 2012; none of the other metrics are being calculated for that year
-    df = df.drop(2012)
+    reserve_accts_before_sales = reserve_accts_before_sales.drop(2012)
     
     # subtract reserve_PCU_sales_cumul from reserve accounts
-    ser = pd.concat([df, -1*prmt.reserve_PCU_sales_cumul], axis=1, sort=True).sum(axis=1)
+    reserve_balance = reserve_accts_before_sales.sub(prmt.reserve_PCU_sales_cumul)
+    
+    reserve_shortfall = pd.Series()
+    for year in reserve_balance.index:
+        if reserve_balance.at[year] >= 0:
+            # set values to be zero
+            reserve_shortfall.at[year] = 0
+        elif reserve_balance.at[year] < 0:
+            reserve_shortfall.at[year] = -1 * reserve_balance.at[year]
+            # shortfall is a positive value
         
-    PCU_sales_cumul = ser.loc[ser < 0]
+    # assume PCU sales will fill in for any reserve shortfall
+    PCU_sales_cumul = reserve_shortfall
     PCU_sales_cumul.name = 'PCU_sales_cumul'
-    prmt.PCU_sales_cumul = PCU_sales_cumul
     
-    reserve_accts = ser.loc[ser >= 0]
+    # create reserve_accts: balance + PCU sales; minimum should be zero
+    reserve_accts = reserve_balance.add(PCU_sales_cumul)
     reserve_accts.name = 'reserve_accts'
-    prmt.reserve_accts = reserve_accts
-        
+
     # calculate reserve sales alone (excluding PCU from reserve_PCU_sales_cumul)
-    reserve_sales_excl_PCU = pd.concat([prmt.reserve_PCU_sales_cumul, -1*PCU_sales_cumul],
-                                       axis=1, sort=False).sum(axis=1)
+    reserve_sales_excl_PCU_cumul = prmt.reserve_PCU_sales_cumul.sub(PCU_sales_cumul)
     
-    # fill in any missing years with zero values
-    for year in range(2013, 2030+1):
-        if year not in list(reserve_sales_excl_PCU.index):
-            reserve_sales_excl_PCU.at[year] = 0
-    reserve_sales_excl_PCU = reserve_sales_excl_PCU.sort_index()
-    
-    prmt.reserve_sales_excl_PCU = reserve_sales_excl_PCU
+    # set object attributes
+    prmt.PCU_sales_cumul = PCU_sales_cumul
+    prmt.reserve_accts = reserve_accts
+    prmt.reserve_sales_excl_PCU = reserve_sales_excl_PCU_cumul
     
     # no return
 # end of calculate_reserve_account_metric_and_related
@@ -9098,12 +9073,7 @@ def turn_snap_into_CIR(yr_quart_period, snaps_CAQC):
     
     # calculate totals
     for col in CIR_snap.columns:
-#         print(f"for {col}, CIR_snap[col].sum(): {CIR_snap[col].sum()}") # for db
-        CIR_snap.at['totals', col] = CIR_snap[col].sum()
-        
-#     print(f"for {yr_quart_period}, show CIR_snap") # for db
-#     print(CIR_snap) # for db
-#     print() # for db
+        CIR_snap.at['totals (incl. offsets)', col] = CIR_snap[col].sum()
         
     logging.info(f"{inspect.currentframe().f_code.co_name} (end)")
     
@@ -9475,11 +9445,9 @@ def private_bank_annual_metric_paper_method():
         
         private_bank_paper.at[quarter_year_period.year] = private_bank_1y
     
-    private_bank_paper_method = private_bank_paper
-    
     logging.info(f"{inspect.currentframe().f_code.co_name} (end)")
     
-    return(private_bank_paper_method)
+    return(private_bank_paper)
 # end of private_bank_annual_metric_paper_method
 
 
@@ -9968,9 +9936,8 @@ def compile_annual_metrics_for_export():
     empty_df = pd.DataFrame(index=empty_index, columns=empty_columns)
     empty_df = empty_df.fillna(' ')
     
-
     caps_export = pd.concat([prmt.CA_cap, prmt.QC_cap], axis=1, sort=True).sum(axis=1)
-    caps_export.name = 'California + Québec caps (annual)'
+    caps_export.name = 'California + Quebec caps (annual)'
     
     emissions_export = prmt.emissions_ann.copy()
     emissions_export.name = 'Covered Emissions (annual)'
@@ -9979,7 +9946,7 @@ def compile_annual_metrics_for_export():
     obligations_export.name = 'Compliance Obligations (annual)'
     
     supply_export = prmt.supply_ann.copy()
-    supply_export.name = 'Private Supply (annual additions)'
+    supply_export.name = 'Private Supply (annual additions) [excludes sales of Reserves and Price Ceiling Units]'
     
     bank_export = prmt.bank_cumul.copy()
     bank_export.name = 'Private Bank (cumulative)'
@@ -10195,13 +10162,13 @@ def create_emissions_pct_sliders():
     # ~~~~~~~~~~~~~~~~~~~~
     # simple
     # create slider widgets as attributes of objects defined earlier
-    em_pct_CA_simp.slider = widgets.FloatSlider(value=-0.02, min=-0.09, max=0.07, step=0.005, 
+    em_pct_CA_simp.slider = widgets.FloatSlider(value=-0.02, min=-0.07, max=0.03, step=0.001,
                                                 description=f"{prmt.emissions_last_hist_yr+1}-2030",
                                                 continuous_update=False, 
                                                 readout_format='.1%'
                                                )
 
-    em_pct_QC_simp.slider = widgets.FloatSlider(value=-0.02, min=-0.09, max=0.07, step=0.005, 
+    em_pct_QC_simp.slider = widgets.FloatSlider(value=-0.02, min=-0.07, max=0.03, step=0.001,
                                                 description=f"{prmt.emissions_last_hist_yr+1}-2030", 
                                                 continuous_update=False, 
                                                 readout_format='.1%'
@@ -10238,28 +10205,28 @@ def create_emissions_pct_sliders():
     else:
         pass
     
-    em_pct_CA_adv1.slider = widgets.FloatSlider(value=-0.02, min=-0.09, max=0.10, step=0.005,
+    em_pct_CA_adv1.slider = widgets.FloatSlider(value=-0.02, min=-0.07, max=0.03, step=0.001,
                                                 description=description_em1, 
                                                 continuous_update=False, 
                                                 readout_format='.1%')
-    em_pct_CA_adv2.slider = widgets.FloatSlider(value=-0.02, min=-0.09, max=0.10, step=0.005,
+    em_pct_CA_adv2.slider = widgets.FloatSlider(value=-0.02, min=-0.07, max=0.03, step=0.001,
                                                 description=description_em2,
                                                 continuous_update=False, 
                                                 readout_format='.1%')
-    em_pct_CA_adv3.slider = widgets.FloatSlider(value=-0.02, min=-0.09, max=0.10, step=0.005, 
+    em_pct_CA_adv3.slider = widgets.FloatSlider(value=-0.02, min=-0.07, max=0.03, step=0.001,
                                                 description=description_em3, 
                                                 continuous_update=False, 
                                                 readout_format='.1%')
 
-    em_pct_QC_adv1.slider = widgets.FloatSlider(value=-0.02, min=-0.09, max=0.10, step=0.005, 
+    em_pct_QC_adv1.slider = widgets.FloatSlider(value=-0.02, min=-0.07, max=0.03, step=0.001, 
                                                 description=description_em1,
                                                 continuous_update=False, 
                                                 readout_format='.1%')
-    em_pct_QC_adv2.slider = widgets.FloatSlider(value=-0.02, min=-0.09, max=0.10, step=0.005, 
+    em_pct_QC_adv2.slider = widgets.FloatSlider(value=-0.02, min=-0.07, max=0.03, step=0.001,
                                                 description=description_em2,
                                                 continuous_update=False, 
                                                 readout_format='.1%')
-    em_pct_QC_adv3.slider = widgets.FloatSlider(value=-0.02, min=-0.09, max=0.10, step=0.005, 
+    em_pct_QC_adv3.slider = widgets.FloatSlider(value=-0.02, min=-0.07, max=0.03, step=0.001,
                                                 description=description_em3,
                                                 continuous_update=False, 
                                                 readout_format='.1%')
@@ -10466,37 +10433,37 @@ def create_offsets_pct_sliders():
     off_pct_CA_adv1.slider = widgets.FloatSlider(
         value=0.08*prmt.offset_rate_fract_of_limit_default, 
         # for period 1, default based on historical data for WCI; legal limit is 8%
-        min=0.0, max=0.10, step=0.005,
+        min=0.0, max=0.10, step=0.001,
         description=description_off1, readout_format='.1%', continuous_update=False)
     
     off_pct_CA_adv2.slider = widgets.FloatSlider(
         value=0.04*prmt.offset_rate_fract_of_limit_default, 
         # CA legal limit in period 2 is 4%
-        min=0.0, max=0.10, step=0.005, 
+        min=0.0, max=0.10, step=0.001, 
         description=description_off2, readout_format='.1%', continuous_update=False)
     
     off_pct_CA_adv3.slider = widgets.FloatSlider(
         value=0.06*prmt.offset_rate_fract_of_limit_default, 
         # CA legal limit in period 3 is 6%
-        min=0.0, max=0.10, step=0.005, 
+        min=0.0, max=0.10, step=0.001, 
         description=description_off3, readout_format='.1%', continuous_update=False)
 
     off_pct_QC_adv1.slider = widgets.FloatSlider(
         value=0.08*prmt.offset_rate_fract_of_limit_default, 
         # for period 1, default based on historical data for WCI; legal limit is 8%
-        min=0.0, max=0.10, step=0.005, 
+        min=0.0, max=0.10, step=0.001, 
         description=description_off1, readout_format='.1%', continuous_update=False)
     
     off_pct_QC_adv2.slider = widgets.FloatSlider(
         value=0.08*prmt.offset_rate_fract_of_limit_default, 
         # QC legal limit in period 2 is 8%
-        min=0.0, max=0.10, step=0.005, 
+        min=0.0, max=0.10, step=0.001, 
         description=description_off2, readout_format='.1%', continuous_update=False)
 
     off_pct_QC_adv3.slider = widgets.FloatSlider(
         value=0.08*prmt.offset_rate_fract_of_limit_default, 
         # QC legal limit in period 3 is 8%
-        min=0.0, max=0.10, step=0.005, 
+        min=0.0, max=0.10, step=0.001, 
         description=description_off3, readout_format='.1%', continuous_update=False)
     
     # no return
@@ -10561,7 +10528,7 @@ def create_figures():
         (f'Instrument supplies* (historical, up to {prmt.supply_last_hist_yr})', [sup_off_CAQC_line_hist]),
         (f'Instrument supplies* (projection)', [sup_off_CAQC_line_proj]),
         ('Caps', [cap_CAQC_line]),
-        ('*Supplies exclude sales of reserves and Price Ceiling Units', [])
+        ('*Supplies exclude sales of Reserves and Price Ceiling Units', [])
     ],
                     label_text_font_size="14px",
                     location=(0, 0),
@@ -10646,9 +10613,14 @@ def create_figures():
     horiz_displacement_paper = 0.5 # units: years; displacement in horizontal direction
 
     # calculate vertical placement of labels:
-
-    # TO DO: delete block of code below if not using; could put into notes about issue
-    # AUTO-ADJUST METHOD:
+    
+    # ALWAYS-BOTTOM METHOD:
+    # using default y_min=-300 & y_max=700 (unless values exceeded), then place labels at bottom always
+    displacement_factor_bottom = 0.04
+    vertical_placement = y_min + displacement_factor_bottom*(y_max - y_min)
+    
+#     # AUTO-ADJUST METHOD:
+#     # delete block of code below if not using; could put into notes about issue
 #     # check if plotted data values are close to y_max
 #     # if so, flip to bottom of graph
 #     displacement_factor_auto = 0.08
@@ -10660,11 +10632,6 @@ def create_figures():
 #             vertical_placement = y_min + displacement_factor_auto*(y_max - y_min)
 #         else:
 #             vertical_placement = 0
-    
-    # ALWAYS-BOTTOM METHOD:
-    # using default y_min=-300 & y_max=700 (unless values exceeded), then place labels at bottom always
-    displacement_factor_bottom = 0.04
-    vertical_placement = y_min + displacement_factor_bottom*(y_max - y_min)
     
     citation1 = Label(x=prmt.emissions_last_hist_yr + 0.5 - horiz_displacement_paper, 
                       y=vertical_placement, 
@@ -10687,7 +10654,7 @@ def create_figures():
 
     legend = Legend(items=[('Private Bank', [bank_vbar]),
                            ('Government Holding Accounts', [gov_vbar]),
-                           ('Sales of reserves & Price Ceiling Units', [reserve_PCU_vbar])
+                           ('Sales of Reserves & Price Ceiling Units', [reserve_PCU_vbar])
                           ],
                     location=(0, 0),
                     label_text_font_size="14px",
@@ -10856,7 +10823,7 @@ def create_auction_tabs():
         description='years',
         disabled=False)
     
-    fract_not_sold_obj.wid = widgets.FloatSlider(min=0.0, max=1.0, step=0.05,
+    fract_not_sold_obj.wid = widgets.FloatSlider(min=0.0, max=1.0, step=0.01,
                                                  description="% unsold", continuous_update=False, 
                                                  readout_format='.0%')
     
@@ -11162,8 +11129,6 @@ def create_export_df():
     # set attribute
     prmt.export_df = export_df
     
-    save_timestamp = time.strftime('%Y-%m-%d_%H%M%S', time.localtime())
-    
     prmt.js_download_of_csv = """
     var csv = '%s';
     
@@ -11185,7 +11150,7 @@ def create_export_df():
         }
     }
     """ % (prmt.export_df.to_csv(index=True).replace('\n','\\n').replace("'","\'"), 
-           f'Near_Zero_WCI_cap_and_trade_model_results_{save_timestamp}.csv')
+           f'WCI-RULES_cap_and_trade_model_results_{prmt.save_timestamp}.csv')
 
     # no return
     logging.info(f"{inspect.currentframe().f_code.co_name} (end)")
@@ -11201,14 +11166,20 @@ def supply_demand_button_on_click(b):
     
     The function is run (the button is "clicked") in initializing model, then runs again when user clicks button.
     """
+    # set new value of prmt.save_timestamp
+    prmt.save_timestamp = time.strftime('%Y-%m-%d_%H%M%S', time.localtime())
     
     logging.info(f"{inspect.currentframe().f_code.co_name} (start)")
     logging.info("***********************************************")
     logging.info("start of new model run, with user settings")
+    logging.info(f"prmt.save_timestamp: {prmt.save_timestamp}")
     logging.info("***********************************************")
     
     supply_demand_button.disabled = True
     supply_demand_button.style.button_color = '#A9A9A9'
+    
+    save_csv_button.disabled = True
+    save_csv_button.style.button_color = '#A9A9A9'
     
     prmt.error_msg_post_refresh = [] # initialize
     
@@ -11284,8 +11255,8 @@ def supply_demand_button_on_click(b):
     supply_demand_button.disabled = False
 
     # enable save button and change color
-    save_csv_button.disabled = False
     save_csv_button.style.button_color = 'PowderBlue'
+    save_csv_button.disabled = False
     
     # display buttons again
     display(widgets.HBox([supply_demand_button, save_csv_button]))
@@ -11321,8 +11292,11 @@ def save_csv_on_click(b):
 # In[ ]:
 
 
-save_timestamp = time.strftime('%Y-%m-%d_%H%M%S', time.localtime())
-logging.info(f"WCI-RULES model log; run started {save_timestamp}")
+logging.info("WCI-RULES model log")
+logging.info("***********************************************")
+logging.info("start of new model run, with default settings")
+logging.info(f"prmt.save_timestamp: {prmt.save_timestamp}")
+logging.info("***********************************************")
 
 # run functions to download files
 load_input_files()
@@ -11453,9 +11427,6 @@ get_QC_allocation_data()
 # prmt.QC_alloc_hist, prmt.QC_alloc_initial, 
 # prmt.QC_alloc_trueups, prmt.QC_alloc_trueups_non_APCR, prmt.QC_alloc_trueups_neg, 
 # prmt.QC_alloc_full_proj
-
-# TO DO: delete line below; now within get_QC_allocation_data
-# calculate_QC_alloc_from_APCR__CIR_and_reserve_sales() # sets prmt.APCR_alloc_distrib
 
 
 # In[ ]:
@@ -11631,7 +11602,7 @@ progress_bar_QC = Progress_bar_auction.create_progress_bar(
     ))
 
 
-# # Run supply-side master function
+# # Run supply-side umbrella function
 # (process_allowance_supply_CA_QC)
 
 # In[ ]:
@@ -11655,29 +11626,6 @@ if prmt.saved_auction_run_default == False:
 else:
     # will use saved run for default auction settings
     pass
-
-
-# In[ ]:
-
-
-# SANDBOX:
-# for date in prmt.QC_alloc_trueups_non_APCR.index.get_level_values('allocation_quarter'):
-#     print(f"show date: {date}") # for db
-#     print(f"show date.year-1: {date.year-1}") # for db
-    
-#     mask1 = prmt.QC_alloc_trueups_non_APCR.index.get_level_values('emission_year')==date.year-1
-#     mask2 = prmt.QC_alloc_trueups_non_APCR.index.get_level_values('allocation_quarter')==date
-#     mask = (mask1) & (mask2)
-#     APCR_for_trueup_quant = prmt.QC_alloc_trueups_non_APCR.loc[mask] # , 'quant_APCR']
-#     print(APCR_for_trueup_quant)
-
-
-# In[ ]:
-
-
-# SANDBOX:
-# QC_alloc_trueups_from_APCR = prmt.QC_alloc_trueups_non_APCR.dropna(subset=['quant_APCR'])
-# QC_alloc_trueups_from_APCR
 
 
 # In[ ]:
@@ -11844,8 +11792,8 @@ if __name__ == '__main__':
 
 
 # end of model run
-save_timestamp = time.strftime('%Y-%m-%d_%H%M', time.localtime())
-logging.info(f"WCI-RULES model log; end of run {save_timestamp}")
+logging.info(f"WCI-RULES model log; end of run {prmt.save_timestamp}")
 
 
 # ## end of model run & interface code
+
