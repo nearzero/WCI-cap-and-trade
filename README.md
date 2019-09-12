@@ -2,7 +2,7 @@
 ## Developed by Near Zero
 ### Version 1.1
 
-load the model on Binder: [![Binder](https://mybinder.org/badge.svg)](https://mybinder.org/v2/gh/nearzero/WCI-cap-and-trade/master?filepath=WCI_model_interface.ipynb)
+load the model on Binder: [![Binder](https://mybinder.org/badge.svg)](https://mybinder.org/v2/gh/nearzero/WCI-cap-and-trade/master?filepath=WCI-RULES_model_interface.ipynb)
 
 ---
 
